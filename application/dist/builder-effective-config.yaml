@@ -1,0 +1,8 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.kithub.inc
+mac:
+  target: dmg
+files: []
+electronVersion: 32.1.2

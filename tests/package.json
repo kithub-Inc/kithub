@@ -1,0 +1,17 @@
+{
+  "name": "@ice1/tests",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "```ts const data: number = 1; const array: { type: string; }[] = [];",
+  "version": "1.0.0",
+  "dependencies": {
+    "@ice1/kithub": "^1.0.3",
+    "chalk": "^4.1.2",
+    "diff": "^7.0.0"
+  }
+}

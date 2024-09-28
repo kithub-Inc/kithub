@@ -1,0 +1,26 @@
+{
+    "name": "kithub-inc",
+    "version": "1.0.0",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1",
+        "build:electron": "electron-builder"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "ISC",
+    "description": "",
+    "devDependencies": {
+        "electron": "^32.1.2",
+        "electron-builder": "^25.0.5"
+    },
+    "build": {
+        "appId": "com.kithub.inc",
+        "mac": {
+            "target": "dmg"
+        }
+    },
+    "dependencies": {
+        "custom-electron-titlebar": "^4.2.8"
+    }
+}

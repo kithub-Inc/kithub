@@ -1,0 +1,34 @@
+<style>
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    .titlebar {
+        z-index: 1000;
+        position: fixed;
+        width: 100vw;
+        height: 40px;
+        backdrop-filter: blur(100px);
+        -webkit-app-region: drag;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 15px 0 80px;
+    }
+
+    .titlebar .titlebar-title {
+        font-family: Fira Code, Menlo, Monaco, 'Courier New', monospace;
+        font-size: 12px;
+    }
+</style>
+
+<body>
+    <div class="titlebar">
+        <p class="titlebar-title">kithub-inc => @4.2.0</p>
+        <!-- <div class="titlebar-title">ICe1BotMaker</div> -->
+    </div>
+
+    <iframe style="width: 100vw; height: 100%; margin-top: 40px;" src="https://port-next-frontend-m0p32q8pf4c745a4.sel4.cloudtype.app" frameborder="0"></iframe>
+</body>
