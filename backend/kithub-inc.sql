@@ -181,6 +181,18 @@ CREATE TABLE `user_alert` (
 );
 CREATE INDEX `user_alert_index` ON `user_alert` (`user_email`);
 
+CREATE TABLE `user_follow` (
+    `node_id` INT AUTO_INCREMENT,
+
+    `user_email` VARCHAR(255),
+    `target_email` VARCHAR(255),
+
+    `created_at` DATETIME DEFAULT NOW(),
+
+    PRIMARY KEY (`node_id`)
+);
+CREATE INDEX `user_follow_index` ON `user_follow` (`user_email`, `target_email`);
+
 
 INSERT INTO `users` (`user_email`, `user_name`, `user_password`, `user_bio`)
 VALUES ("ice1github@gmail.com", "고서온", "ebfbe675b88f8b8e995b19ea93da66bba62ae67d7f07c22e9ccdd44b19de9a7b0e20d6ee212205a8708eb4eb53fc679b5bc4ee494b7fd33ce11dd67e9e12dd05", "Node.js Express, React **Master**");
@@ -188,3 +200,4 @@ VALUES ("ice1github@gmail.com", "고서온", "ebfbe675b88f8b8e995b19ea93da66bba6
 INSERT INTO `user_device` (`user_email`, `device_agent`) VALUES ("ice1github@gmail.com", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36");
 SELECT * FROM `user_device`;
 SELECT * FROM `repository_authorities` WHERE `repo_id` = 3;
+SELECT * FROM `user_follow`;

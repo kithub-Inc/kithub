@@ -1,0 +1,54 @@
+name: Deploy to cloudtype
+on:
+  push:
+    branches:
+      - master
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Connect deploy key
+        uses: cloudtype-github-actions/connect@v1
+        with:
+          token: ${{ secrets.CLOUDTYPE_TOKEN }}
+          ghtoken: ${{ secrets.GHP_TOKEN }}
+      - name: Deploy
+        uses: cloudtype-github-actions/deploy@v1
+        with:
+          token: ${{ secrets.CLOUDTYPE_TOKEN }}
+          project: ice1github/kithub
+          stage: main
+          yaml: |
+            name: backend
+            app: node@22
+            options:
+              env:
+                - name: NODE_ENV
+                  value: production
+                - name: GOOGLE_APP_EMAIL
+                  value: ${{ secrets.GOOGLE_APP_EMAIL }}
+                - name: GOOGLE_APP_KEY
+                  value: ${{ secrets.GOOGLE_APP_KEY }}
+                - name: DATABASE_USER
+                  value: ${{ secrets.DATABASE_USER }}
+                - name: DATABASE_PASSWORD
+                  secret: mariadb-root-password
+                - name: DATABASE_NAME
+                  value: ${{ secrets.DATABASE_NAME }}
+                - name: DATABASE_HOST
+                  value: mariadb
+                - name: JWT_SECRET
+                  value: ${{ secrets.JWT_SECRET }}
+                - name: DATABASE_PORT
+                  value: "3306"
+              ports: "3030"
+              buildenv: []
+              start: node dist
+              install: npm install --save-dev
+            context:
+              git:
+                url: git@github.com:${{ github.repository }}.git
+                ref: ${{ github.ref }}
+              preset: node

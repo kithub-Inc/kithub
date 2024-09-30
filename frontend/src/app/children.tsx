@@ -1,8 +1,7 @@
-import { BellIcon, BookIcon, BookPlusIcon, CheckIcon, MoonIcon, ScrollIcon, SunIcon, UserIcon } from 'lucide-react';
+import { BellIcon, BookIcon, BookOpenIcon, BookPlusIcon, CheckIcon, GithubIcon, ScrollIcon, UserIcon } from 'lucide-react';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTheme } from 'next-themes';
 import Image from 'next/image';
 import Link from 'next/link';
 import dotenv from 'dotenv';
@@ -91,12 +90,12 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
     return (
         <>
             <CommandDialog open={open} onOpenChange={setOpen}>
-                <CommandInput placeholder="리포지토리 또는 유저 검색..." />
+                <CommandInput placeholder="레포지토리 또는 유저 검색..." />
 
                 <CommandList>
                     <CommandEmpty>검색된 데이터 없음.</CommandEmpty>
 
-                    <CommandGroup heading="리포지토리">
+                    <CommandGroup heading="레포지토리">
                         <CommandItem>
                             <BookIcon className="mr-2 h-2 w-2" />
                             <span>고서온 / nextjs-master</span>
@@ -120,7 +119,7 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
             </CommandDialog>
 
             <div className="flex min-h-screen w-full flex-col bg-muted/40">
-                <div className="flex flex-col sm:gap-4 sm:py-4 h-full">
+                <div className="flex flex-col sm:gap-4 sm:pt-4 h-full">
                     <header className="sticky top-0 z-30 flex h-14 items-center gap-4 border-b bg-background px-4 sm:static sm:h-auto sm:border-0 sm:bg-transparent sm:px-6">
                         <Breadcrumb className="hidden md:flex">
                             <BreadcrumbList>
@@ -132,9 +131,11 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
                             </BreadcrumbList>
                         </Breadcrumb>
 
+                        <Button className="hidden md:flex" onClick={() => location.href = `https://kithub.gitbook.io/kithub-docs`} size="icon" variant="outline"><BookOpenIcon className="w-4 h-4" /></Button>
+
                         <div className="relative ml-auto flex-1 md:grow-0 flex items-center" onClick={() => setOpen(open => !open)}>
                             <button className="inline-flex items-center whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 border border-input hover:bg-accent hover:text-accent-foreground px-4 py-2 relative h-8 w-full justify-start rounded-[0.5rem] bg-muted/50 text-sm font-normal text-muted-foreground shadow-none sm:pr-12 md:w-40 lg:w-64">
-                                <span className="hidden lg:inline-flex">리포지토리 또는 유저 검색...</span>
+                                <span className="hidden lg:inline-flex">레포지토리 또는 유저 검색...</span>
                                 <span className="inline-flex lg:hidden">검색...</span>
 
                                 <kbd className="pointer-events-none absolute right-[0.3rem] top-[0.3rem] hidden h-5 select-none items-center gap-1 rounded border bg-muted px-1.5 font-mono text-[10px] font-medium opacity-100 sm:flex">
@@ -160,6 +161,8 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
                         </DropdownMenu> */}
 
                         <Button onClick={() => router.push(`/repositories/topic`)} variant="outline"><ScrollIcon className="w-4 h-4 mr-2" /> 토픽</Button>
+
+                        <Button className="hidden md:flex" onClick={() => location.href = `https://github.com/kithub-Inc/kithub`} size="icon"><GithubIcon className="w-4 h-4" /></Button>
 
                         {
                             userData ?
@@ -272,7 +275,7 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
                 </div>
             </div>
 
-            {/* <Toaster /> */}
+            <Toaster />
         </>
     )
 }

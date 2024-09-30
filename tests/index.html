@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Canvas 박스와 연결선</title>
+
+    <style>
+        canvas {
+            border: 1px solid black;
+        }
+
+        .test {
+            color: #cacaca;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="myCanvas" width="1000" height="600"></canvas>
+
+    <script>
+        const canvas = document.getElementById('myCanvas');
+        const ctx = canvas.getContext('2d');
+
+        const boxes = [
+            { x: 50, y: 150, width: 100, height: 100, hover: false, target: [-1] },
+
+            { x: 300, y: 50, width: 100, height: 100, hover: false, target: [0, 4] },
+            { x: 300, y: 250, width: 100, height: 100, hover: false, target: [0, 4] },
+            { x: 300, y: 450, width: 100, height: 100, hover: false, target: [0, 4] },
+
+            { x: 550, y: 50, width: 200, height: 500, hover: false, target: [-1] },
+        ];
+
+        let select = -1;
+        let move = false;
+        let moveStartX = 0;
+        let moveStartY = 0;
+
+        const controlPointOffset = 75;
+
+        function drawBox(box) {
+            ctx.fillStyle = '#e9e9e9';
+            ctx.fillRect(box.x, box.y, box.width, box.height);
+
+            if (box.hover) {
+                ctx.strokeStyle = '#cacaca';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(box.x, box.y, box.width, box.height);
+            }
+
+            box.target.forEach(t => {
+                if (t !== -1) drawCurve(box, boxes[t], 0);
+            });
+        }
+
+        function drawCurve(fromBox, toBox, offsetY) {
+            let fromX = fromBox.x;
+            let fromY = fromBox.y + fromBox.height / 2 + offsetY;
+
+            let toX = toBox.x + toBox.width;
+            let toY = toBox.y + toBox.height / 2;
+            
+            if (fromBox.x <= toBox.x) {
+                fromX = fromBox.x + fromBox.width;
+                fromY = fromBox.y + fromBox.height / 2 + offsetY;
+
+                toX = toBox.x;
+                toY = toBox.y + toBox.height / 2;
+            }
+
+            ctx.strokeStyle = '#cacaca';
+            ctx.lineWidth = 2;
+
+            ctx.beginPath();
+
+            if (fromBox.x <= toBox.x) {
+                ctx.moveTo(fromX, fromY);
+                ctx.bezierCurveTo(fromX + controlPointOffset, fromY, toX - controlPointOffset, toY, toX, toY);
+
+            } else {
+                ctx.moveTo(toX, toY);
+                ctx.bezierCurveTo(toX + controlPointOffset, toY, fromX - controlPointOffset, fromY, fromX, fromY);
+            }
+
+            ctx.stroke();
+        }
+
+        setInterval(() => {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            boxes.forEach(drawBox);
+        });
+
+        canvas.addEventListener("mousedown", e => {
+            boxes.forEach((b, idx) => {
+                if (
+                    e.offsetX >= b.x && e.offsetX <= b.x + b.width &&
+                    e.offsetY >= b.y && e.offsetY <= b.y + b.height
+                ) {
+                    move = true;
+                    select = idx;
+
+                    return;
+                }
+            });
+            
+            moveStartX = e.offsetX;
+            moveStartY = e.offsetY;
+        });
+
+        canvas.addEventListener("mousemove", e => {
+            if (move) {
+                const dx = e.offsetX - moveStartX;
+                const dy = e.offsetY - moveStartY;
+
+                boxes[select].x += dx;
+                boxes[select].y += dy;
+
+                moveStartX = e.offsetX;
+                moveStartY = e.offsetY;
+
+            } else {
+                boxes.forEach(b => {
+                    if (
+                        e.offsetX >= b.x && e.offsetX <= b.x + b.width &&
+                        e.offsetY >= b.y && e.offsetY <= b.y + b.height
+                    ) {
+                        b.hover = true;
+                        return ;
+                        
+                    } else {
+                        b.hover = false;
+                    }
+                });
+            }
+        });
+
+        canvas.addEventListener("mouseup", e => {
+            move = false;
+            select = -1;
+        });
+    </script>
+</body>
+</html>

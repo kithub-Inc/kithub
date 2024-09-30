@@ -1,6 +1,6 @@
 'use client';
 
-import { TicketIcon, ZapIcon } from 'lucide-react';
+import { TicketIcon } from 'lucide-react';
 
 import { REGEXP_ONLY_DIGITS_AND_CHARS } from 'input-otp';
 import { useRouter } from 'next/navigation';
@@ -63,7 +63,7 @@ const SignIn = (): JSX.Element => {
     }
 
     return (
-        <div className="w-full lg:grid lg:min-h-[600px] lg:grid-cols-2 h-dvh">
+        <div className="w-full lg:grid lg:min-h-[600px] lg:grid-cols-2 h-[calc(100dvh_-_4.5rem)] overflow-hidden">
             <div className="flex items-center justify-center py-12">
                 <div className="mx-auto grid w-[350px] gap-6">
                     <div className="grid gap-2 text-center">

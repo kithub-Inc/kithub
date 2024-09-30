@@ -97,7 +97,7 @@ const CreateRepository = (props: any): JSX.Element => {
             }
 
             toast({ title: response.data.message });
-        } else toast({ title: `리포지토리는 20자 이내로, 설명(선택)은 100자 이내로, 카테고리는 선택하였는지 다시 한번 확인해주세요.` });
+        } else toast({ title: `레포지토리는 20자 이내로, 설명(선택)은 100자 이내로, 카테고리는 선택하였는지 다시 한번 확인해주세요.` });
     }
 
     const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -124,7 +124,7 @@ const CreateRepository = (props: any): JSX.Element => {
                             <span className="sr-only">뒤로</span>
                         </Button>
 
-                        <h1 className="flex-1 shrink-0 whitespace-nowrap text-xl font-semibold tracking-tight sm:grow-0">리포지토리 수정</h1>
+                        <h1 className="flex-1 shrink-0 whitespace-nowrap text-xl font-semibold tracking-tight sm:grow-0">레포지토리 수정</h1>
                         <Badge variant="outline" className="ml-auto sm:ml-0">newer</Badge>
 
                         <div className="hidden items-center gap-2 md:ml-auto md:flex">
@@ -138,7 +138,7 @@ const CreateRepository = (props: any): JSX.Element => {
                             <Card x-chunk="dashboard-07-chunk-0">
                                 <CardHeader>
                                     <CardTitle>상세정보</CardTitle>
-                                    <CardDescription>리포지토리를 만드는 것에 있어 이름 만큼은 꼭 필요합니다.</CardDescription>
+                                    <CardDescription>레포지토리를 만드는 것에 있어 이름 만큼은 꼭 필요합니다.</CardDescription>
                                 </CardHeader>
 
                                 <CardContent>
@@ -165,7 +165,7 @@ const CreateRepository = (props: any): JSX.Element => {
                                             <Badge className="ml-2">beta</Badge>
                                         </CardTitle>
     
-                                        <CardDescription>유저에게 리포지토리 권한을 부여할 수 있습니다.</CardDescription>
+                                        <CardDescription>유저에게 레포지토리 권한을 부여할 수 있습니다.</CardDescription>
                                     </CardHeader>
     
                                     <CardContent>
@@ -322,7 +322,7 @@ const CreateRepository = (props: any): JSX.Element => {
                             <Card className="overflow-hidden" x-chunk="dashboard-07-chunk-4">
                                 <CardHeader>
                                     <CardTitle>토픽 이미지</CardTitle>
-                                    <CardDescription>토픽 이미지를 등록하면 보는사람들이 내 리포지토리의 목적이 무엇인지 확인할 수 있습니다.</CardDescription>
+                                    <CardDescription>토픽 이미지를 등록하면 보는사람들이 내 레포지토리의 목적이 무엇인지 확인할 수 있습니다.</CardDescription>
                                 </CardHeader>
 
                                 <CardContent>
@@ -389,7 +389,7 @@ const CreateRepository = (props: any): JSX.Element => {
 
                     <div className="flex items-center justify-center gap-2 md:hidden">
                         <Button variant="outline" size="sm" onClick={() => history.back()}>취소</Button>
-                        <Button size="sm" onClick={handleSubmit}>리포지토리 수정</Button>
+                        <Button size="sm" onClick={handleSubmit}>레포지토리 수정</Button>
                     </div>
                 </div>
             </main>

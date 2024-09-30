@@ -164,8 +164,6 @@ const RepositoryIssues = (props: any) => {
         (async () => {
             const response = await axios.get(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/issues`);
             if (response.data.status === 200) setData(response.data.data);
-
-            toast({ title: response.data.message });
         })();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps

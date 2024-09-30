@@ -1,7 +1,7 @@
 'use client';
 
 import { QueryClient, QueryClientProvider } from 'react-query';
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense } from 'react';
 import dotenv from 'dotenv';
 
 import { ThemeProvider } from '@/components/theme-provider';

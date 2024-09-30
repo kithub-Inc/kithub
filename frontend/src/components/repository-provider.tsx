@@ -61,10 +61,7 @@ const RepositoryProvider = ({ props, children: Children }: { props: any, childre
                 if (commitsResponse.data.status === 200) setCommits(commitsResponse.data.data);
 
                 setRepository(response.data.data);
-                toast({ title: branchesResponse.data.message });
             }
-
-            toast({ title: response.data.message });
         })();
     }, [branch?.node_id, props.params.node_id, toast]);
 
@@ -80,8 +77,6 @@ const RepositoryProvider = ({ props, children: Children }: { props: any, childre
             const branchResponse = await axios.get(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/branch/${value}`);
             if (branchResponse.data.status === 200) setBranch(branchResponse.data.data);
         }
-
-        toast({ title: response.data.message });
     }
 
     const handleChangeCommit = async (value: string): Promise<void> => {
@@ -102,8 +97,6 @@ const RepositoryProvider = ({ props, children: Children }: { props: any, childre
 
             setCommit(commitResponse.data.data);
         }
-
-        toast({ title: commitResponse.data.message });
     }
 
     const handleStarSubmit = async (): Promise<void> => {
@@ -198,7 +191,7 @@ const RepositoryProvider = ({ props, children: Children }: { props: any, childre
                                     </TooltipTrigger>
 
                                     <TooltipContent>
-                                        <p>리포지토리 수정</p>
+                                        <p>레포지토리 수정</p>
                                     </TooltipContent>
                                 </Tooltip>
                             }

@@ -542,11 +542,11 @@ let Repositories = (() => {
         static service(req, res) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
-                const response = { status: 400, message: `리포지토리 목록 불러오기 실패` };
+                const response = { status: 400, message: `레포지토리 목록 불러오기 실패` };
                 const result = yield mysql.execute(`SELECT R.*, U.user_name FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.user_email = ? AND repo_archive = 0 AND repo_visibility = 1 ORDER BY R.created_at DESC`, [req.params.user_email]);
                 if (result && Array.isArray(result[0])) {
                     response.status = 200;
-                    response.message = `리포지토리 목록 불러오기 성공`;
+                    response.message = `레포지토리 목록 불러오기 성공`;
                     response.data = result[0];
                 }
                 res.send(JSON.stringify(response));
@@ -572,12 +572,12 @@ let Repository = (() => {
         static service(req, res) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
-                const response = { status: 400, message: `리포지토리 불러오기 실패` };
+                const response = { status: 400, message: `레포지토리 불러오기 실패` };
                 const result = yield mysql.execute(`SELECT R.*, U.user_name FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ? AND repo_archive = 0 AND repo_visibility = 1`, [req.params.node_id]);
                 const grantes = yield mysql.execute(`SELECT RA.* FROM repository_authorities AS RA JOIN repositories AS R ON RA.repo_id = R.node_id WHERE RA.repo_id = ? AND repo_archive = 0 AND repo_visibility = 1`, [req.params.node_id]);
                 if (result && Array.isArray(result[0]) && result[0][0] && grantes && Array.isArray(grantes[0])) {
                     response.status = 200;
-                    response.message = `리포지토리 불러오기 성공`;
+                    response.message = `레포지토리 불러오기 성공`;
                     response.data = result[0][0];
                     response.data.repo_grantes = grantes[0];
                 }
@@ -1008,7 +1008,7 @@ let RepositoryIssueCreate = (() => {
                 const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
                 if (verify.data.status === 200) {
                     const insert = yield mysql.execute(`INSERT INTO repository_issue (repo_id, user_email, issue_title, issue_content, issue_status) VALUES (?, ?, ?, ?, ?)`, [req.params.node_id, verify.data.data.user_email, req.body.issue_title, req.body.issue_content, `대기`]);
-                    yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, CONCAT(?, "/", RI.node_id), CONCAT("새 이슈: @", IFNULL(U.user_name, R.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U JOIN repository_issue AS RI ON R.user_email = U.user_email AND R.node_id = RI.repo_id WHERE R.node_id = ? ORDER BY RI.created_at DESC LIMIT 1`, [0, `/repositories/${req.params.node_id}/issues`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 리포지토리에 이슈를 생성했습니다.`, req.params.node_id]);
+                    yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, CONCAT(?, "/", RI.node_id), CONCAT("새 이슈: @", IFNULL(U.user_name, R.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U JOIN repository_issue AS RI ON R.user_email = U.user_email AND R.node_id = RI.repo_id WHERE R.node_id = ? ORDER BY RI.created_at DESC LIMIT 1`, [0, `/repositories/${req.params.node_id}/issues`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 레포지토리에 이슈를 생성했습니다.`, req.params.node_id]);
                     if (insert) {
                         response.status = 200;
                         response.message = `이슈 작성 성공`;
@@ -1107,7 +1107,7 @@ let RepositoryCreate = (() => {
             return __awaiter(this, void 0, void 0, function* () {
                 var _a;
                 res.setHeader(`Content-type`, `application/json`);
-                const response = { status: 400, message: `리포지토리 생성 실패` };
+                const response = { status: 400, message: `레포지토리 생성 실패` };
                 const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
                 if (verify.data.status === 200) {
                     const result = yield mysql.execute(`SELECT node_id FROM repositories ORDER BY created_at DESC LIMIT 1`);
@@ -1121,7 +1121,7 @@ let RepositoryCreate = (() => {
                         yield mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, `admin`, verify.data.data.user_email]);
                     grantes.forEach((e) => __awaiter(this, void 0, void 0, function* () {
                         yield mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, e.type, e.user_email]);
-                        yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "리포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]);
+                        yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]);
                     }));
                     const branch_src = `data/${req.body.user_email}/${data.node_id + 1}/main`;
                     fs_1.default.mkdirSync(branch_src, { recursive: true });
@@ -1138,10 +1138,10 @@ let RepositoryCreate = (() => {
                     if (req.file)
                         path = `/uploads/${(_a = req.file) === null || _a === void 0 ? void 0 : _a.filename}`;
                     const insert = yield mysql.execute(`INSERT INTO repositories (user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path]);
-                    grantes.forEach((e) => __awaiter(this, void 0, void 0, function* () { return yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "리포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]); }));
+                    grantes.forEach((e) => __awaiter(this, void 0, void 0, function* () { return yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]); }));
                     if (insert) {
                         response.status = 200;
-                        response.message = `리포지토리 생성 성공`;
+                        response.message = `레포지토리 생성 성공`;
                     }
                 }
                 res.send(JSON.stringify(response));
@@ -1168,7 +1168,7 @@ let RepositoryModify = (() => {
             return __awaiter(this, void 0, void 0, function* () {
                 var _a;
                 res.setHeader(`Content-type`, `application/json`);
-                const response = { status: 400, message: `리포지토리 수정 실패` };
+                const response = { status: 400, message: `레포지토리 수정 실패` };
                 const result = yield mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.body.node_id]);
                 const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
                 if (result && Array.isArray(result[0]) && result[0][0]) {
@@ -1187,11 +1187,11 @@ let RepositoryModify = (() => {
                         yield mysql.execute(`DELETE FROM repository_authorities WHERE repo_id = ?`, [node_id]);
                         JSON.parse(req.body.repo_grantes).forEach((e) => __awaiter(this, void 0, void 0, function* () {
                             yield mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [node_id, e.type, e.user_email]);
-                            yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "리포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${req.body.node_id}`, req.body.node_id]);
+                            yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${req.body.node_id}`, req.body.node_id]);
                         }));
                         if (update) {
                             response.status = 200;
-                            response.message = `리포지토리 수정 성공`;
+                            response.message = `레포지토리 수정 성공`;
                         }
                     }
                 }
@@ -1336,7 +1336,7 @@ let RepositoryStar = (() => {
                             yield mysql.execute(`DELETE FROM repository_star WHERE repo_id = ? AND user_email = ?`, [req.params.node_id, verify.data.data.user_email]);
                         else {
                             yield mysql.execute(`INSERT INTO repository_star (repo_id, user_email) VALUES (?, ?)`, [req.params.node_id, verify.data.data.user_email]);
-                            yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [0, `/repositories/${req.params.node_id}`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 리포지토리에 스타를 남겼습니다.`, req.params.node_id]);
+                            yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [0, `/repositories/${req.params.node_id}`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 레포지토리에 스타를 남겼습니다.`, req.params.node_id]);
                         }
                     }
                     response.status = 200;

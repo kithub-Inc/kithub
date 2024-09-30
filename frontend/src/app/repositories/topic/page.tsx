@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, StarIcon } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';

@@ -1,6 +1,6 @@
 'use client';
 
-import { TicketIcon, ZapIcon } from 'lucide-react';
+import { TicketIcon } from 'lucide-react';
 
 import { useRouter } from 'next/navigation';
 import React, { useState } from 'react';
@@ -9,10 +9,10 @@ import Link from 'next/link';
 import dotenv from 'dotenv';
 import axios from 'axios';
 
+import { useToast } from '@/components/hooks/use-toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { useToast } from '@/components/hooks/use-toast';
 
 dotenv.config();
 
@@ -54,7 +54,7 @@ const SignUp = (): JSX.Element => {
     }
 
     return (
-        <div className="w-full lg:grid lg:min-h-[600px] lg:grid-cols-2 h-dvh">
+        <div className="w-full lg:grid lg:min-h-[600px] lg:grid-cols-2 h-[calc(100dvh_-_4.5rem)] overflow-hidden">
             <div className="flex items-center justify-center py-12">
                 <div className="mx-auto grid w-[350px] gap-6">
                     <div className="grid gap-2 text-center">
@@ -83,7 +83,7 @@ const SignUp = (): JSX.Element => {
                             <Input id="reenterpassword" type="password" required defaultValue={reenterPassword} onChange={handleReenterPasswordChange} />
                         </div>
 
-                        <Button className="w-full" onClick={handleSubmit}><TicketIcon className="mr-2 h-4 w-4" /> 2차 인증</Button>
+                        <Button className="w-full" onClick={handleSubmit}><TicketIcon className="mr-2 h-4 w-4" /> 회원가입</Button>
                     </div>
 
                     <div className="mt-4 text-center text-sm">
