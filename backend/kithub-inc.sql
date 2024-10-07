@@ -173,7 +173,7 @@ CREATE TABLE `repository_pullrequest` (
 
     `branch_name` VARCHAR(15),
     `pr_src` VARCHAR(15),
-    
+
     `created_at` DATETIME DEFAULT NOW(),
     PRIMARY KEY (`node_id`)
 );
@@ -213,8 +213,8 @@ DELETE FROM `user_follow` WHERE 1;
 INSERT INTO `users` (`user_email`, `user_name`, `user_password`, `user_bio`)
 VALUES ("ice1github@gmail.com", "고서온", "ebfbe675b88f8b8e995b19ea93da66bba62ae67d7f07c22e9ccdd44b19de9a7b0e20d6ee212205a8708eb4eb53fc679b5bc4ee494b7fd33ce11dd67e9e12dd05", "Node.js Express, React **Master**");
 
-INSERT INTO `user_device` (`user_email`, `device_agent`) VALUES ("ice1github@gmail.com", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36");
-SELECT * FROM `user_device`;
-SELECT * FROM `repository_authorities` WHERE `repo_id` = 3;
-SELECT * FROM `user_follow`;
-INSERT INTO `user_alert` (`user_email`, `alert_read`, `alert_title`, `alert_content`, `alert_link`, `created_at`) VALUES ("ice1github@gmail.com", 0, "환영", "하빈다 ㅉㅈㅈㅈ", "/", "2024-09-20 14:32:09");
+-- INSERT INTO `user_device` (`user_email`, `device_agent`) VALUES ("ice1github@gmail.com", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36");
+-- SELECT * FROM `user_device`;
+-- SELECT * FROM `repository_authorities` WHERE `repo_id` = 3;
+-- SELECT * FROM `user_follow`;
+-- INSERT INTO `user_alert` (`user_email`, `alert_read`, `alert_title`, `alert_content`, `alert_link`, `created_at`) VALUES ("ice1github@gmail.com", 0, "환영", "하빈다 ㅉㅈㅈㅈ", "/", "2024-09-20 14:32:09");

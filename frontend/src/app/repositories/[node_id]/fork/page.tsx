@@ -88,7 +88,7 @@ const Fork = (props: any) => {
             formdata.append(`repo_license`, license);
             formdata.append(`accessToken`, localStorage.getItem(`accessToken`) || ``);
 
-            const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/fork`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
+            const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/fork`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
             if (response.data.status === 200) {
                 setTimeout(() => {
                     router.push(`/${userData?.user_email}`);
