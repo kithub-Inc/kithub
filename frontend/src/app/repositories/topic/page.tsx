@@ -3,24 +3,19 @@
 import { ChevronLeft } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
 import dotenv from 'dotenv';
 import axios from 'axios';
 
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 
-import { IRepository } from '@/interfaces/interfaces';
+import RepositoryItem from '@/components/repository-item';
 
-import { useUser } from '@/components/hooks/use-user';
+import { IRepository } from '@/interfaces/interfaces';
 
 dotenv.config();
 
 const Topic = (): JSX.Element => {
-    const router = useRouter();
-    const userData = useUser();
-
     const [repositories, setRepositories] = useState<IRepository[]>([]);
     const [categories, setCategories] = useState<{ repo_category: string; }[]>([]);
     const [category, setCategory] = useState<string>(`all`);
@@ -72,25 +67,7 @@ const Topic = (): JSX.Element => {
                     <div className="flex flex-wrap items-start max-x-[59rem]">
                         {
                             repositories.map(e =>
-                                <Card key={e.node_id} className="mr-5 mb-5 w-72 w-full md:w-72">
-                                    <CardHeader>
-                                        <CardTitle>
-                                            {
-                                                e.image_src &&
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img className="w-72 mb-5" src={`${process.env.BACKEND_URL}/api/repository/${e.node_id}/topic_image`} alt="repo_image" />
-                                            }
-
-                                            {e.user_name || e.user_email} / {e.repo_name}
-                                        </CardTitle>
-
-                                        <CardDescription>{e.repo_description}</CardDescription>
-                                    </CardHeader>
-
-                                    <CardContent className="flex items-center justify-between">
-                                        <Button onClick={() => router.push(`/repositories/${e.node_id}`)} size="sm" variant="secondary">자세히 보기</Button>
-                                    </CardContent>
-                                </Card>
+                                <RepositoryItem key={e.node_id} e={e} />
                             )
                         }
                     </div>

@@ -184,6 +184,29 @@ class User {
     }
 }
 
+@Control.Service(`post`, `/api/view-private`)
+class UserViewPrivate {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `레포지토리 목록 불러오기 실패` };
+        
+        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        
+        if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
+            const result = await mysql.execute(`SELECT U.user_name, R.* FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.user_email = ? ORDER BY R.created_at DESC`, [req.body.user_email]);
+
+            if (result && Array.isArray(result[0])) {
+                response.status = 200;
+                response.message = `레포지토리 목록 불러오기 성공`;
+                response.data = result[0];
+            }
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
 @Control.Service(`post`, `/api/user/devices`)
 class UserDevices {
     public static async service(req: Request, res: Response): Promise<void> {
@@ -236,7 +259,10 @@ class UserAlerts {
         const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
         
         if (verify.data.status === 200) {
-            const result = await mysql.execute(`SELECT * FROM user_alert WHERE user_email = ? ORDER BY created_at DESC LIMIT 5`, [verify.data.data.user_email]);
+            let result: any;
+
+            if (req.body?.limit) result = await mysql.execute(`SELECT * FROM user_alert WHERE user_email = ? ORDER BY created_at DESC LIMIT 5`, [verify.data.data.user_email]);
+            else result = await mysql.execute(`SELECT * FROM user_alert WHERE user_email = ? ORDER BY created_at DESC`, [verify.data.data.user_email]);
             
             if (result && Array.isArray(result[0])) {
                 response.status = 200;
@@ -316,6 +342,28 @@ class UserModifyName {
     }
 }
 
+@Control.Service(`post`, `/api/user/modify/bio`)
+class UserModifyBio {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `설명 수정 실패` };
+        
+        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        
+        if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
+            const update = await mysql.execute(`UPDATE users SET user_bio = ? WHERE user_email = ?`, [req.body.user_bio, req.body.user_email]);
+
+            if (update) {
+                response.status = 200;
+                response.message = `설명 수정 성공`;
+            }
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
 @Control.Service(`post`, `/api/user/modify/password`)
 class UserModifyPassword {
     public static async service(req: Request, res: Response): Promise<void> {
@@ -368,7 +416,10 @@ class UserFollow {
             const result = await mysql.execute(`SELECT * FROM user_follow WHERE user_email = ? AND target_email = ?`, [verify.data.data.user_email, req.body.user_email]);
 
             if (result && Array.isArray(result[0]) && result[0][0]) await mysql.execute(`DELETE FROM user_follow WHERE user_email = ? AND target_email = ?`, [verify.data.data.user_email, req.body.user_email]);
-            else await mysql.execute(`INSERT INTO user_follow (user_email, target_email) VALUES (?, ?)`, [verify.data.data.user_email, req.body.user_email]);
+            else {
+                await mysql.execute(`INSERT INTO user_follow (user_email, target_email) VALUES (?, ?)`, [verify.data.data.user_email, req.body.user_email]);
+                await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, CONCAT("/", U.user_email), CONCAT("새 팔로워: @", IFNULL(U.user_name, U.user_email)), CONCAT(IFNULL(U.user_name, U.user_email), "님이 당신을 팔로우하기 시작했습니다.") FROM users AS U WHERE U.user_email = ?`, [req.body.user_email, verify.data.data.user_email]);
+            }
             
             response.status = 200;
             response.message = `팔로우 성공`;
@@ -384,7 +435,7 @@ class UserFollowing {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `팔로잉 목록 불러오기 실패` };
-        const result = await mysql.execute(`SELECT * FROM user_follow WHERE user_email = ?`, [req.params.user_email]);
+        const result = await mysql.execute(`SELECT U.user_email, U.user_name, U.avatar_src, U.user_bio, UF.created_at FROM user_follow AS UF JOIN users AS U ON UF.target_email = U.user_email WHERE UF.user_email = ?`, [req.params.user_email]);
         
         if (result && Array.isArray(result[0]) && result[0][0]) {
             response.status = 200;
@@ -402,7 +453,7 @@ class UserFollower {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `팔로워 목록 불러오기 실패` };
-        const result = await mysql.execute(`SELECT * FROM user_follow WHERE target_email = ?`, [req.params.user_email]);
+        const result = await mysql.execute(`SELECT U.user_email, U.user_name, U.avatar_src, U.user_bio, UF.created_at FROM user_follow AS UF JOIN users AS U ON UF.user_email = U.user_email WHERE UF.target_email = ?`, [req.params.user_email]);
         
         if (result && Array.isArray(result[0]) && result[0][0]) {
             response.status = 200;
@@ -531,14 +582,14 @@ class RepositoryBranchDirectory {
     public static async service(req: Request, res: Response): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
-        const response: Status = { status: 400, message: `디렉토리 불러오기 실패` };
+        const response: Status = { status: 400, message: `디렉터리 불러오기 실패` };
         const result = await mysql.execute(`SELECT RB.*, U.user_email FROM repository_branch AS RB JOIN repositories AS R JOIN users AS U ON RB.repo_id = R.node_id AND R.user_email = U.user_email WHERE RB.repo_id = ? AND RB.node_id = ?`, [req.params.repo_id, req.params.node_id]);
         
         if (result && Array.isArray(result[0]) && result[0][0]) {
             const data = result[0][0] as { user_email: string; repo_id: number; branch_name: string; node_id: number; };
 
             response.status = 200;
-            response.message = `디렉토리 불러오기 성공`;
+            response.message = `디렉터리 불러오기 성공`;
             response.data = [];
 
             const lastCommit = await mysql.execute(`SELECT RBC.* FROM repository_branch_commit AS RBC JOIN repository_branch AS RB JOIN repositories AS R JOIN users AS U ON RBC.branch_id = RB.node_id AND RB.repo_id = R.node_id AND R.user_email = U.user_email WHERE RB.node_id = ? ORDER BY RB.created_at DESC LIMIT 1`, [data.node_id]);
@@ -600,14 +651,14 @@ class RepositoryBranchCommitDirectory {
     public static async service(req: Request, res: Response): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
-        const response: Status = { status: 400, message: `디렉토리 불러오기 실패` };
+        const response: Status = { status: 400, message: `디렉터리 불러오기 실패` };
         const result = await mysql.execute(`SELECT * FROM repository_branch_commit WHERE node_id = ?`, [req.params.node_id]);
         
         if (result && Array.isArray(result[0]) && result[0][0]) {
             const commit = result[0][0] as { commit_src: string; };
 
             response.status = 200;
-            response.message = `디렉토리 불러오기 성공`;
+            response.message = `디렉터리 불러오기 성공`;
     
             response.data = recursion(`${commit.commit_src}`);
             response.data.sort((a: { type: string; }, b: { type: string; }) => {
@@ -626,14 +677,14 @@ class RepositoryBranchPrevCommitDirectory {
     public static async service(req: Request, res: Response): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
-        const response: Status = { status: 400, message: `디렉토리 불러오기 실패` };
+        const response: Status = { status: 400, message: `디렉터리 불러오기 실패` };
         const result = await mysql.execute(`SELECT * FROM repository_branch_commit WHERE branch_id = ? AND node_id < ? ORDER BY created_at DESC LIMIT 1`, [req.params.branch_id, Number(req.params.node_id)]);
         
         if (result && Array.isArray(result[0]) && result[0][0]) {
             const commit = result[0][0] as { commit_src: string; };
 
             response.status = 200;
-            response.message = `디렉토리 불러오기 성공`;
+            response.message = `디렉터리 불러오기 성공`;
     
             response.data = recursion(`${commit.commit_src}`);
             response.data.sort((a: { type: string; }, b: { type: string; }) => {
@@ -800,7 +851,7 @@ class RepositoryCreate {
             if (!grantes.reduce((pre: string[], cur: any) => [...pre, cur.user_email], []).includes(verify.data.data.user_email)) await mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, `admin`, verify.data.data.user_email]);
             grantes.forEach(async (e: { user_email: string; type: string }) => {
                 await mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, e.type, e.user_email]);
-                await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]);
+                await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("새 권한: @", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]);
             });
     
             const branch_src: string = `data/${req.body.user_email}/${data.node_id + 1}/main`;
@@ -813,13 +864,13 @@ class RepositoryCreate {
     
             fs.mkdirSync(`${branch_src}/${id}`, { recursive: true });
             fs.writeFileSync(`${branch_src}/${id}/readme.md`, `## ${req.body.repo_name}`);
-            await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src.substring(5) ]);
-            await mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [id, `${branch_src}/${id}`, `main branch initial`]);
+            const branch: any = await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src.substring(5) ]);
+            await mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [branch[0].insertId, `${branch_src}/${id}`, `main branch initial`]);
     
             fs.mkdirSync(`data/${req.body.user_email}/${data.node_id + 1}`, { recursive: true });
             let path: string = ``;
             if (req.file) path = `/uploads/${req.file?.filename}`;
-            const insert = await mysql.execute(`INSERT INTO repositories (user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path ]);
+            const insert = await mysql.execute(`INSERT INTO repositories (node_id, user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [data.node_id + 1, req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path ]);
             grantes.forEach(async (e: { user_email: string; type: string }) => await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]));
     
             if (insert) {
@@ -868,6 +919,59 @@ class RepositoryModify {
             }
         }
 
+        res.send(JSON.stringify(response));
+    }
+}
+
+@Control.Service(`post`, `/api/repository/fork`)
+class RepositoryFork {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `레포지토리 포크 실패` };
+        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+
+        if (verify.data.status === 200) {
+            const result = await mysql.execute(`SELECT node_id FROM repositories ORDER BY created_at DESC LIMIT 1`);
+            const data = { node_id: 0 };
+    
+            if (result && Array.isArray(result[0]) && result[0][0]) {
+                const res = result[0][0] as { node_id: number; };
+                data.node_id = res.node_id;
+            }
+    
+            const grantes = JSON.parse(req.body.repo_grantes);
+            if (!grantes.reduce((pre: string[], cur: any) => [...pre, cur.user_email], []).includes(verify.data.data.user_email)) await mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, `admin`, verify.data.data.user_email]);
+            grantes.forEach(async (e: { user_email: string; type: string }) => {
+                await mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, e.type, e.user_email]);
+                await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("새 권한: @", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]);
+            });
+    
+            const branch_src: string = `data/${req.body.user_email}/${data.node_id + 1}/main`;
+            fs.mkdirSync(branch_src, { recursive: true });
+    
+            const lastId = await mysql.execute(`SELECT node_id FROM repository_branch_commit ORDER BY created_at DESC LIMIT 1`);
+            let id: number = 1;
+    
+            if (lastId && Array.isArray(lastId[0]) && lastId[0][0]) id = (lastId[0][0] as { node_id: number; }).node_id + 1;
+
+            fs.mkdirSync(`${branch_src}/${id}`, { recursive: true });
+            fs.writeFileSync(`${branch_src}/${id}/readme.md`, `## ${req.body.repo_name}`);
+            const branch: any = await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src.substring(5) ]);
+            await mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [branch[0].insertId, `${branch_src}/${id}`, `main branch initial`]);
+    
+            fs.mkdirSync(`data/${req.body.user_email}/${data.node_id + 1}`, { recursive: true });
+            let path: string = ``;
+            if (req.file) path = `/uploads/${req.file?.filename}`;
+            const insert = await mysql.execute(`INSERT INTO repositories (node_id, repo_type, user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, "forked", ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [data.node_id + 1, req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path ]);
+            grantes.forEach(async (e: { user_email: string; type: string }) => await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]));
+    
+            if (insert) {
+                response.status = 200;
+                response.message = `레포지토리 포크 성공`;
+            }
+        }
+    
         res.send(JSON.stringify(response));
     }
 }
@@ -944,6 +1048,148 @@ class RepositoryBranchPush {
     }
 }
 
+@Control.Service(`post`, `/api/repository/:node_id/pullrequest`)
+class RepositoryPullRequest {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `풀리퀘스트 전송 실패` };
+
+        const result = await mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.node_id]);
+        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+
+        if (result && Array.isArray(result[0]) && result[0][0] && verify.data.status === 200) {
+            const lastId = await mysql.execute(`SELECT * FROM repository_pullrequest ORDER BY created_at DESC LIMIT 1`);
+
+            if (lastId && Array.isArray(lastId[0]) && lastId[0][0]) {
+                const src = `/${verify.data.data.user_email}/pullrequests/${(lastId[0][0] as any).node_id}`;
+                fs.mkdirSync(`/${verify.data.data.user_email}/pullrequests`, { recursive: true });
+                fs.mkdirSync(src, { recursive: true });
+
+                await mysql.execute(`INSERT INTO repository_pullrequest (repo_id, user_email, branch_name, pr_src) VALUES (?, ?, ?, ?)`, [req.params.node_id, verify.data.data.user_email, req.body.branch_name, src]);
+    
+                response.status = 200;
+                response.message = `풀리퀘스트 전송 성공`;
+            }
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
+@Control.Service(`post`, `/api/repository/:repo_id/branch/:node_id/remove`)
+class RepositoryBranchRemove {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `브랜치 삭제 실패` };
+
+        const result = await mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.repo_id]);
+        const branch = await mysql.execute(`SELECT * FROM repository_branch WHERE node_id = ?`, [req.params.node_id]);
+
+        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+
+        if (result && Array.isArray(result[0]) && result[0][0] && branch && Array.isArray(branch[0]) && branch[0][0]) {
+            const data = result[0][0] as { user_email: string; };
+            const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.repo_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
+            
+            if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
+                await mysql.execute(`DELETE FROM repository_branch WHERE node_id = ?`, [req.params.node_id]);
+                await mysql.execute(`DELETE FROM repository_branch_commit WHERE branch_id = ?`, [req.params.node_id]);
+                fs.rmSync(path.join(`${__dirname}/../data/${data.user_email}/${req.params.repo_id}/${(branch[0][0] as any).branch_name}`), { recursive: true, force: true });
+
+                response.status = 200;
+                response.message = `브랜치 삭제 성공`;
+            }
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
+@Control.Service(`post`, `/api/repository/:node_id/remove`)
+class RepositoryRemove {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `레포지토리 삭제 실패` };
+
+        const result = await mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.node_id]);
+
+        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+
+        if (result && Array.isArray(result[0]) && result[0][0]) {
+            const data = result[0][0] as { user_email: string; };
+            const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.node_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
+            
+            if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
+                await mysql.execute(`DELETE FROM repositories WHERE node_id = ?`, [req.params.node_id]);
+                await mysql.execute(`DELETE FROM repository_branch WHERE repo_id = ?`, [req.params.node_id]);
+                await mysql.execute(`DELETE FROM repository_authorities WHERE repo_id = ?`, [req.params.node_id]);
+                fs.rmSync(path.join(`${__dirname}/../data/${data.user_email}/${req.params.node_id}`), { recursive: true, force: true });
+
+                response.status = 200;
+                response.message = `레포지토리 삭제 성공`;
+            }
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
+@Control.Service(`post`, `/api/repository/:repo_id/issue/:node_id/remove`)
+class RepositoryIssueRemove {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `이슈 삭제 실패` };
+
+        const result = await mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.repo_id]);
+        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+
+        if (result && Array.isArray(result[0]) && result[0][0]) {
+            const data = result[0][0] as { user_email: string; };
+            const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.repo_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
+            
+            if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
+                await mysql.execute(`DELETE FROM repository_issue WHERE node_id = ?`, [req.params.node_id]);
+
+                response.status = 200;
+                response.message = `이슈 삭제 성공`;
+            }
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
+@Control.Service(`post`, `/api/repository/:repo_id/issue/:issue_id/comments/:node_id/remove`)
+class RepositoryIssueCommentRemove {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `댓글 삭제 실패` };
+
+        const result = await mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.repo_id]);
+        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+
+        if (result && Array.isArray(result[0]) && result[0][0]) {
+            const data = result[0][0] as { user_email: string; };
+            const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.repo_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
+            
+            if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
+                await mysql.execute(`DELETE FROM repository_issue_comment WHERE node_id = ?`, [req.params.node_id]);
+                await mysql.execute(`DELETE FROM repository_issue_comment_heart WHERE comment_id = ?`, [req.params.node_id]);
+
+                response.status = 200;
+                response.message = `댓글 삭제 성공`;
+            }
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
 
 @Control.Service(`get`, `/api/repository/:node_id/stars`)
 class RepositoryStars {
@@ -979,7 +1225,7 @@ class RepositoryStar {
                 if (result[0][0]) await mysql.execute(`DELETE FROM repository_star WHERE repo_id = ? AND user_email = ?`, [req.params.node_id, verify.data.data.user_email]);
                 else {
                     await mysql.execute(`INSERT INTO repository_star (repo_id, user_email) VALUES (?, ?)`, [req.params.node_id, verify.data.data.user_email]);
-                    await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [0, `/repositories/${req.params.node_id}`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 레포지토리에 스타를 남겼습니다.`, req.params.node_id]);
+                    await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, ?, CONCAT("새 스타: @", IFNULL(U.user_name, U.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [0, `/repositories/${req.params.node_id}`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 레포지토리에 스타를 남겼습니다.`, req.params.node_id]);
                 }
             }
             
@@ -1052,6 +1298,28 @@ class Categories {
             response.status = 200;
             response.message = `카테고리 목록 불러오기 성공`;
             response.data = result[0];
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
+
+@Control.Service(`get`, `/api/search`)
+class Search {
+    public static async service(req: Request, res: Response): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `검색 실패` };
+        const resultRepos = await mysql.execute(`SELECT R.*, U.user_name FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE (R.repo_name LIKE CONCAT("%", ?, "%") OR R.repo_category LIKE CONCAT("%", ?, "%") OR R.repo_subcategory LIKE CONCAT("%", ?, "%")) AND repo_archive = 0 AND repo_visibility = 1`, [req.query.q, req.query.q, req.query.q]);
+        const resultUsers = await mysql.execute(`SELECT user_name, user_email, avatar_src, user_bio FROM users WHERE user_name LIKE CONCAT("%", ?, "%") OR user_email LIKE CONCAT("%", ?, "%")`, [req.query.q, req.query.q]);
+        
+        if (resultRepos && Array.isArray(resultRepos[0]) && resultUsers && Array.isArray(resultUsers[0])) {
+            response.status = 200;
+            response.message = `검색 성공`;
+            response.data = {};
+            response.data.repositories = resultRepos[0];
+            response.data.users = resultUsers[0];
         }
 
         res.send(JSON.stringify(response));

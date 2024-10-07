@@ -14,12 +14,14 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
 import { useUser } from '@/components/hooks/use-user';
+import { Textarea } from '@/components/ui/textarea';
 
 dotenv.config();
 
 const SettingsGeneral = () => {
     const [image, setImage] = useState<string>(``);
     const [name, setName] = useState<string>(``);
+    const [bio, setBio] = useState<string>(``);
 
     const { toast } = useToast();
     const avatar = useRef(null);
@@ -31,6 +33,8 @@ const SettingsGeneral = () => {
     useEffect(() => {
         if (userData.avatar_src) setImage(`${process.env.BACKEND_URL}/api/${userData.user_email}/avatar`);
         setName(userData.user_name || ``);
+
+        setBio(userData.user_bio || ``);
     }, [userData]);
 
     const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -89,6 +93,26 @@ const SettingsGeneral = () => {
         } else toast({ title: `이름을 제대로 입력했는지 다시 확인해주세요.` });
     }
 
+    const handleBioSubmit = async () => {
+        const formdata = new FormData();
+
+        if (userData?.user_email && bio.trim() !== ``) {
+            formdata.append(`user_email`, userData?.user_email);
+            formdata.append(`accessToken`, localStorage.getItem(`accessToken`) || ``);
+            formdata.append(`user_bio`, bio);
+
+            const response = await axios.post(`${process.env.BACKEND_URL}/api/user/modify/bio`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
+            if (response.data.status === 200) {
+                setTimeout(() => {
+                    router.push(`/settings/general`);
+                    window.location.replace(`/settings/general`);
+                }, 500);
+            }
+
+            toast({ title: response.data.message });
+        } else toast({ title: `설명을 제대로 입력했는지 다시 확인해주세요.` });
+    }
+
     return (
         <main className="flex min-h-[calc(100vh_-_theme(spacing.16))] flex-1 flex-col gap-4 bg-muted/40 p-4 md:gap-8 md:p-10">
             <div className="mx-auto grid w-full max-w-6xl gap-2">
@@ -144,6 +168,22 @@ const SettingsGeneral = () => {
 
                         <CardFooter className="border-t px-6 py-4">
                             <Button onClick={handleNameSubmit}>저장</Button>
+                        </CardFooter>
+                    </Card>
+
+                    <Card x-chunk="dashboard-04-chunk-1">
+                        <CardHeader>
+                            <CardTitle>설명 변경</CardTitle>
+                        </CardHeader>
+
+                        <CardContent>
+                            <form>
+                                <Textarea value={bio} onChange={e => setBio(e.target.value)} placeholder="설명" />
+                            </form>
+                        </CardContent>
+
+                        <CardFooter className="border-t px-6 py-4">
+                            <Button onClick={handleBioSubmit}>저장</Button>
                         </CardFooter>
                     </Card>
                 </div>

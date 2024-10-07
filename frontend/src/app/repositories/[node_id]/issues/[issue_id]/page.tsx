@@ -97,6 +97,19 @@ const RepositoryIssue = (props: any): JSX.Element => {
         }
     }
 
+    const handleIssueRemoveSubmit = async (): Promise<void> => {
+        const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/issue/${issue?.node_id}/remove`, { accessToken: localStorage.getItem(`accessToken`) });
+        if (response.data.status === 200) router.push(`/repositories/${props.params.node_id}/issues`);
+    }
+
+    const handleCommentRemoveSubmit = async (node_id: number): Promise<void> => {
+        const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/issue/${issue?.node_id}/comments/${node_id}/remove`, { accessToken: localStorage.getItem(`accessToken`) });
+        if (response.data.status === 200) {
+            const responseComments = await axios.get(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/issue/${issue?.node_id}/comments`);
+            if (responseComments.data.status === 200) setComments(responseComments.data.data);
+        }
+    }
+
     return (
         <RepositoryProvider props={props}>
             {
@@ -172,7 +185,7 @@ const RepositoryIssue = (props: any): JSX.Element => {
                                                     <DropdownMenuItem>신고</DropdownMenuItem>
                                                     {
                                                         userData?.user_email === issue?.user_email &&
-                                                        <DropdownMenuItem>삭제</DropdownMenuItem>
+                                                        <DropdownMenuItem onClick={handleIssueRemoveSubmit}>삭제</DropdownMenuItem>
                                                     }
                                                 </>
                                             }
@@ -227,7 +240,7 @@ const RepositoryIssue = (props: any): JSX.Element => {
                                                                     <DropdownMenuItem>신고</DropdownMenuItem>
                                                                     {
                                                                         userData?.user_email === e?.user_email &&
-                                                                        <DropdownMenuItem>삭제</DropdownMenuItem>
+                                                                        <DropdownMenuItem onClick={() => handleCommentRemoveSubmit(e.node_id)}>삭제</DropdownMenuItem>
                                                                     }
                                                                 </>
                                                             }

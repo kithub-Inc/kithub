@@ -164,6 +164,21 @@ CREATE TABLE `repository_issue_comment_heart` (
 );
 CREATE INDEX `repository_issue_comment_heart_index` ON `repository_issue_comment_heart` (`comment_id`, `user_email`);
 
+CREATE TABLE `repository_pullrequest` (
+    `node_id` INT AUTO_INCREMENT,
+
+    `repo_id` INT,
+
+    `user_email` VARCHAR(255),
+
+    `branch_name` VARCHAR(15),
+    `pr_src` VARCHAR(15),
+    
+    `created_at` DATETIME DEFAULT NOW(),
+    PRIMARY KEY (`node_id`)
+);
+CREATE INDEX `repository_pullrequest_index` ON `repository_pullrequest` (`node_id`, `repo_id`);
+
 
 CREATE TABLE `user_alert` (
     `node_id` INT AUTO_INCREMENT,
@@ -192,6 +207,7 @@ CREATE TABLE `user_follow` (
     PRIMARY KEY (`node_id`)
 );
 CREATE INDEX `user_follow_index` ON `user_follow` (`user_email`, `target_email`);
+DELETE FROM `user_follow` WHERE 1;
 
 
 INSERT INTO `users` (`user_email`, `user_name`, `user_password`, `user_bio`)
@@ -201,3 +217,4 @@ INSERT INTO `user_device` (`user_email`, `device_agent`) VALUES ("ice1github@gma
 SELECT * FROM `user_device`;
 SELECT * FROM `repository_authorities` WHERE `repo_id` = 3;
 SELECT * FROM `user_follow`;
+INSERT INTO `user_alert` (`user_email`, `alert_read`, `alert_title`, `alert_content`, `alert_link`, `created_at`) VALUES ("ice1github@gmail.com", 0, "환영", "하빈다 ㅉㅈㅈㅈ", "/", "2024-09-20 14:32:09");

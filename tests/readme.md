@@ -1,9 +1,9 @@
-### lilpa-images
+## lilpa-images
 
-```ts
+```tsx
 const data: number = 1;
 const array: { type: string; }[] = [];
 
 if (data >= 10) array.push({ type: `no problem!` });
-console.log(array);
+console.log(<p>array</p>);
 ```

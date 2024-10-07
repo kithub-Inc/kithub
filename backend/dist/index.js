@@ -725,12 +725,12 @@ let RepositoryBranchDirectory = (() => {
         static service(req, res) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
-                const response = { status: 400, message: `디렉토리 불러오기 실패` };
+                const response = { status: 400, message: `디렉터리 불러오기 실패` };
                 const result = yield mysql.execute(`SELECT RB.*, U.user_email FROM repository_branch AS RB JOIN repositories AS R JOIN users AS U ON RB.repo_id = R.node_id AND R.user_email = U.user_email WHERE RB.repo_id = ? AND RB.node_id = ?`, [req.params.repo_id, req.params.node_id]);
                 if (result && Array.isArray(result[0]) && result[0][0]) {
                     const data = result[0][0];
                     response.status = 200;
-                    response.message = `디렉토리 불러오기 성공`;
+                    response.message = `디렉터리 불러오기 성공`;
                     response.data = [];
                     const lastCommit = yield mysql.execute(`SELECT RBC.* FROM repository_branch_commit AS RBC JOIN repository_branch AS RB JOIN repositories AS R JOIN users AS U ON RBC.branch_id = RB.node_id AND RB.repo_id = R.node_id AND R.user_email = U.user_email WHERE RB.node_id = ? ORDER BY RB.created_at DESC LIMIT 1`, [data.node_id]);
                     if (lastCommit && Array.isArray(lastCommit[0]) && lastCommit[0][0]) {
@@ -829,12 +829,12 @@ let RepositoryBranchCommitDirectory = (() => {
         static service(req, res) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
-                const response = { status: 400, message: `디렉토리 불러오기 실패` };
+                const response = { status: 400, message: `디렉터리 불러오기 실패` };
                 const result = yield mysql.execute(`SELECT * FROM repository_branch_commit WHERE node_id = ?`, [req.params.node_id]);
                 if (result && Array.isArray(result[0]) && result[0][0]) {
                     const commit = result[0][0];
                     response.status = 200;
-                    response.message = `디렉토리 불러오기 성공`;
+                    response.message = `디렉터리 불러오기 성공`;
                     response.data = recursion(`${commit.commit_src}`);
                     response.data.sort((a, b) => {
                         if (a.type === `folder` && b.type !== `folder`)
@@ -868,12 +868,12 @@ let RepositoryBranchPrevCommitDirectory = (() => {
         static service(req, res) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
-                const response = { status: 400, message: `디렉토리 불러오기 실패` };
+                const response = { status: 400, message: `디렉터리 불러오기 실패` };
                 const result = yield mysql.execute(`SELECT * FROM repository_branch_commit WHERE branch_id = ? AND node_id < ? ORDER BY created_at DESC LIMIT 1`, [req.params.branch_id, Number(req.params.node_id)]);
                 if (result && Array.isArray(result[0]) && result[0][0]) {
                     const commit = result[0][0];
                     response.status = 200;
-                    response.message = `디렉토리 불러오기 성공`;
+                    response.message = `디렉터리 불러오기 성공`;
                     response.data = recursion(`${commit.commit_src}`);
                     response.data.sort((a, b) => {
                         if (a.type === `folder` && b.type !== `folder`)

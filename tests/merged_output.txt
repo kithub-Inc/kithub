@@ -1,0 +1,9 @@
+
+    const main = (asdf: string): string => {
+        return asdf.replace(/a/g, "#");
+    }
+    
+    console.log(main("qwfqwweffsadfasfqwsdffa"))
+    console.log(true);
+    
+

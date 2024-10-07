@@ -149,7 +149,7 @@ const RepositoryIssues = (props: any) => {
                                     <DropdownMenuItem>신고</DropdownMenuItem>
                                     {
                                         userData?.user_email === origin?.user_email &&
-                                        <DropdownMenuItem>삭제</DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => handleIssueRemoveSubmit(origin.node_id)}>삭제</DropdownMenuItem>
                                     }
                                 </>
                             }
@@ -164,6 +164,9 @@ const RepositoryIssues = (props: any) => {
         (async () => {
             const response = await axios.get(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/issues`);
             if (response.data.status === 200) setData(response.data.data);
+
+            const responseRepository = await axios.get(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}`);
+            if (responseRepository.data.status === 200) setRepository(responseRepository.data.data);
         })();
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -207,13 +210,18 @@ const RepositoryIssues = (props: any) => {
         }
     }
 
+    const handleIssueRemoveSubmit = async (issueId: number): Promise<void> => {
+        const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/issue/${issueId}/remove`, { accessToken: localStorage.getItem(`accessToken`) });
+        if (response.data.status === 200) {
+            const response = await axios.get(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/issues`);
+            if (response.data.status === 200) setData(response.data.data);
+        }
+    }
+
     return (
         <RepositoryProvider props={props}>
             {
                 ({ repository }: IProps) => {
-                    // eslint-disable-next-line react-hooks/rules-of-hooks, react-hooks/exhaustive-deps
-                    useEffect(() => setRepository(repository), []);
-
                     return (
                         <div className="w-full mt-10">
                             <Breadcrumb>

@@ -21,6 +21,7 @@ export interface IRepository {
     repo_grantes: any[];
     image_src: string;
     created_at: string;
+    repo_type: `forked` | undefined;
 }
 
 export interface IBranch {
@@ -87,5 +88,14 @@ export interface IStar {
     node_id: number;
     repo_id: number;
     user_email: string;
+    created_at: string;
+}
+
+export interface IAlert {
+    node_id: number;
+    alert_title: string;
+    alert_content: string;
+    alert_read: boolean;
+    alert_link: string;
     created_at: string;
 }

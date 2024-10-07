@@ -35,11 +35,11 @@ const CreateRepository = (): JSX.Element => {
 
     const [grantes, setGrantes] = useState<{ user_email: string; type: string; }[]>([]);
     const grantEmail = useRef(null);
+    const file = useRef(null);
 
     const { toast } = useToast();
     const router = useRouter();
     const userData = useUser();
-    const file = useRef(null);
 
     if (!userData) router.push(`/`);
 

@@ -8,10 +8,13 @@ import dotenv from 'dotenv';
 import moment from 'moment';
 import axios from 'axios';
 
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+
+import RepositoryItem from '@/components/repository-item';
 
 import { IRepository, IUser } from '@/interfaces/interfaces';
 
@@ -26,30 +29,39 @@ const Repository = (props: any): JSX.Element => {
     const [following, setFollowing] = useState<{ node_id: number; user_email: string; target_email: string; }[]>([]);
     const [follower, setFollower] = useState<{ node_id: number; user_email: string; target_email: string; }[]>([]);
     const [repositories, setRepositories] = useState<IRepository[]>([]);
+    const [state, setState] = useState<boolean>(false);
     const [user, setUser] = useState<IUser>({});
 
     useEffect(() => {
         (async () => {
+            const responseUser = await axios.get(`${process.env.BACKEND_URL}/api/user/${props.params.user_email}`);
+            if (responseUser.data.status === 200) setUser(responseUser.data.data);
             const responseRepositories = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/repositories`);
             if (responseRepositories.data.status === 200) setRepositories(responseRepositories.data.data);
 
-            const responseUser = await axios.get(`${process.env.BACKEND_URL}/api/user/${props.params.user_email}`);
-            if (responseUser.data.status === 200) setUser(responseUser.data.data);
-
             const responseFollowing = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/following`);
             if (responseFollowing.data.status === 200) setFollowing(responseFollowing.data.data);
             const responseFollower = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/follower`);
             if (responseFollower.data.status === 200) setFollower(responseFollower.data.data);
+            setState(responseFollower.data.data?.find?.((e: any) => e.user_email === userData.user_email) ? true : false);
         })();
-    }, [props.params.user_email]);
 
-    const handleFollow = async () => {
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [props.params.user_email, userData?.user_email]);
+
+    const handleFollow = async (): Promise<void> => {
         const response = await axios.post(`${process.env.BACKEND_URL}/api/user/follow`, { accessToken: localStorage.getItem(`accessToken`), user_email: user.user_email });
-        if (response.data.status === 200) {
-            const responseFollowing = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/following`);
-            if (responseFollowing.data.status === 200) setFollowing(responseFollowing.data.data);
-            const responseFollower = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/follower`);
-            if (responseFollower.data.status === 200) setFollower(responseFollower.data.data);
+        if (response.data.status === 200) setState(!state);
+    }
+
+    const handleViewPrivateSubmit = async (view: boolean): Promise<void> => {
+        if (view) {
+            const response = await axios.post(`${process.env.BACKEND_URL}/api/view-private`, { accessToken: localStorage.getItem(`accessToken`), user_email: user.user_email });
+            if (response.data.status === 200) setRepositories(response.data.data);
+            
+        } else {
+            const responseRepositories = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/repositories`);
+            if (responseRepositories.data.status === 200) setRepositories(responseRepositories.data.data);
         }
     }
 
@@ -74,15 +86,15 @@ const Repository = (props: any): JSX.Element => {
 
                     <div className="mt-5 border p-6 rounded-xl bg-white flex items-center justify-between">
                         <div className="flex items-center">
-                            <p className="flex items-center group hover:text-blue-600 cursor-pointer"><UserRoundPlusIcon className="w-4 h-4 mr-2 group-hover:stroke-blue-600" /><span className="font-bold mr-1">팔로잉</span> {following.length}명</p>
+                            <p onClick={() => router.push(`/${props.params.user_email}/following`)} className="flex items-center group hover:text-blue-600 cursor-pointer"><UserRoundPlusIcon className="w-4 h-4 mr-2 group-hover:stroke-blue-600" /><span className="font-bold mr-1">팔로잉</span> {following.length}명</p>
                             <Separator orientation="vertical" className="mx-4 h-[30px]" />
-                            <p className="flex items-center group hover:text-blue-600 cursor-pointer"><SquareUserRoundIcon className="w-4 h-4 mr-2 group-hover:stroke-blue-600" /><span className="font-bold mr-1">팔로워</span> {follower.length}명</p>
+                            <p onClick={() => router.push(`/${props.params.user_email}/follower`)} className="flex items-center group hover:text-blue-600 cursor-pointer"><SquareUserRoundIcon className="w-4 h-4 mr-2 group-hover:stroke-blue-600" /><span className="font-bold mr-1">팔로워</span> {follower.length}명</p>
                         </div>
 
                         {
-                            userData?.user_email !== user.user_email &&
+                            userData && (userData?.user_email !== user.user_email) &&
                             (
-                                userData && follower.find(e => e.user_email === userData.user_email) ?
+                                state ?
                                 <Button size="sm" onClick={handleFollow} variant="outline">팔로잉</Button>
                                 :
                                 <Button size="sm" onClick={handleFollow}><PlusIcon className="w-3 h-3 mr-1" /> 팔로우</Button>
@@ -108,37 +120,25 @@ const Repository = (props: any): JSX.Element => {
                         <p className="mt-10 text-sm flex items-center"><CalendarIcon className="w-4 h-4 mr-2" /> <span className="font-bold">{moment(user.created_at).format(`YYYY년 MM월 DD일`)}</span>에 가입함</p>
                     </div>
 
-                    <p className="text-lg mt-10"><span className="font-bold">{user.user_name || user.user_email}</span>님의 레포지토리</p>
+                    <div className="mt-10 flex items-center justify-between">
+                        <p className="text-lg"><span className="font-bold">{user.user_name || user.user_email}</span>님의 레포지토리</p>
+
+                        {
+                            userData?.user_email === user.user_email &&
+                            <div className="flex items-center space-x-3">
+                                <Label htmlFor="view-private">
+                                    <Badge variant="outline">view-private</Badge>
+                                </Label>
+    
+                                <Switch id="view-private" onCheckedChange={handleViewPrivateSubmit} />
+                            </div>
+                        }
+                    </div>
                     
                     <div className="flex flex-wrap items-start max-w-[59rem]">
                         {
                             repositories.map(e =>
-                                <Card key={e.node_id} className="mr-5 mb-5 w-full md:w-72">
-                                    <CardHeader>
-                                        <CardTitle>
-                                            {
-                                                e.image_src &&
-                                                // eslint-disable-next-line @next/next/no-img-element
-                                                <img className="w-72 mb-5" src={`${process.env.BACKEND_URL}/api/repository/${e.node_id}/topic_image`} alt="repo_image" />
-                                            }
-
-                                            <div className="flex items-center justify-between">
-                                                {e.repo_name}
-
-                                                <div>
-                                                    <Badge variant="outline">{e.repo_category}</Badge>
-                                                    {e.repo_subcategory && <Badge className="ml-2" variant="outline">{e.repo_subcategory}</Badge>}
-                                                </div>
-                                            </div>
-                                        </CardTitle>
-
-                                        <CardDescription>{e.repo_description}</CardDescription>
-                                    </CardHeader>
-
-                                    <CardContent className="flex items-center justify-between">
-                                        <Button onClick={() => router.push(`/repositories/${e.node_id}`)} size="sm" variant="secondary">자세히 보기</Button>
-                                    </CardContent>
-                                </Card>
+                                <RepositoryItem key={e.node_id} e={e} bool />
                             )
                         }
                     </div>

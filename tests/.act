@@ -1,0 +1,5 @@
+<route path="/asdf">
+    <act-script module="typescript">
+        asdf
+    </act-script>
+</route>

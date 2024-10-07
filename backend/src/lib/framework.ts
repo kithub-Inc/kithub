@@ -48,8 +48,9 @@ class Controller {
     public setRoutes(): void {
         const { application: self } = this;
 
-        this.routes.forEach((route: Route) => self[route.method](route.url, multer({ dest: `data/uploads` }).single(`image`), (req: Request, res: Response) => {
+        this.routes.forEach((route: Route) => self[route.method](route.url, multer({ dest: `data/uploads` }).single(`image`), async (req: Request, res: Response) => {
             console.log(`${chalk.green(req.method.toUpperCase())} | ${chalk.underline(req.url)} (${req.ip})`);
+            // await new Promise((res) => setTimeout(() => res(true), 1000));
             route.constructor.service(req, res);
         }));
     }

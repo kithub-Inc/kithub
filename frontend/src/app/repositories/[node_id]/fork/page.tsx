@@ -25,7 +25,7 @@ import { useUser } from '@/components/hooks/use-user';
 
 dotenv.config();
 
-const CreateRepository = (props: any): JSX.Element => {
+const Fork = (props: any) => {
     const [repository, setRepository] = useState<IRepository>();
 
     const [visibility, setVisibility] = useState<`public` | `private`>(`public`);
@@ -88,7 +88,7 @@ const CreateRepository = (props: any): JSX.Element => {
             formdata.append(`repo_license`, license);
             formdata.append(`accessToken`, localStorage.getItem(`accessToken`) || ``);
 
-            const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/modify`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
+            const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/fork`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
             if (response.data.status === 200) {
                 setTimeout(() => {
                     router.push(`/${userData?.user_email}`);
@@ -113,25 +113,27 @@ const CreateRepository = (props: any): JSX.Element => {
             }
         }
     }
-
+    
     return (
         <>
             <main className="grid flex-1 items-start gap-4 p-4 sm:px-6 sm:py-0 md:gap-8 mt-10">
-                <div className="mx-auto grid max-w-[59rem] flex-1 auto-rows-max gap-4">
+                <div className="mx-auto grid w-full md:max-w-[59rem] px-8 md:px-0 flex-1 auto-rows-max gap-4">
                     <div className="flex items-center gap-4">
                         <Button onClick={() => history.back()} variant="outline" size="icon" className="h-7 w-7">
                             <ChevronLeft className="h-4 w-4" />
                             <span className="sr-only">뒤로</span>
                         </Button>
 
-                        <h1 className="flex-1 shrink-0 whitespace-nowrap text-xl font-semibold tracking-tight sm:grow-0">레포지토리 수정</h1>
-                        <Badge variant="outline" className="ml-auto sm:ml-0">newer</Badge>
+                        <h1 style={{ marginLeft: `-5px` }} className="flex-1 shrink-0 whitespace-nowrap text-xl font-semibold tracking-tight sm:grow-0 mt-1">포크된 레포지토리 생성</h1>
+                        <Badge variant="outline">newer</Badge>
 
                         <div className="hidden items-center gap-2 md:ml-auto md:flex">
                             <Button variant="outline" size="icon" onClick={() => history.back()}><XIcon className="w-4 h-4" /></Button>
                             <Button size="icon" onClick={handleSubmit}><CheckIcon className="w-4 h-4" /></Button>
                         </div>
                     </div>
+
+                    <div className="mt-2 border bg-slate-50 px-4 py-2 rounded-md code2">↵ extended from <span className="text-cyan-700 code2 mx-1">@{repository?.user_name || repository?.user_email}/{repository?.repo_name}</span></div>
                     
                     <div className="grid gap-4 md:grid-cols-[1fr_250px] lg:grid-cols-3 lg:gap-8">
                         <div className="grid auto-rows-max items-start gap-4 lg:col-span-2 lg:gap-8">
@@ -397,4 +399,4 @@ const CreateRepository = (props: any): JSX.Element => {
     );
 }
 
-export default CreateRepository;
+export default Fork;

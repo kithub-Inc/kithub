@@ -1,6 +1,6 @@
-import { BellIcon, BookIcon, BookOpenIcon, BookPlusIcon, CheckIcon, GithubIcon, ScrollIcon, UserIcon } from 'lucide-react';
+import { ChevronRight, ScrollIcon, BellIcon, BookOpenIcon, BookPlusIcon, CheckIcon, GithubIcon, Scroll, ChevronRightIcon } from 'lucide-react';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -8,10 +8,11 @@ import dotenv from 'dotenv';
 import axios from 'axios';
 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList, CommandSeparator } from '@/components/ui/command';
+import { CommandDialog, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from '@/components/ui/command';
 import { CardHeader, CardContent, CardFooter, CardTitle, CardDescription, } from '@/components/ui/card';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbList } from '@/components/ui/breadcrumb';
 import { PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Separator } from '@/components/ui/separator';
 import { Toaster } from '@/components/ui/toaster';
 import { Popover } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
@@ -19,6 +20,8 @@ import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 
 import logo from '../../public/old_logo.png';
+
+import { IAlert } from '@/interfaces/interfaces';
 
 import { useUser } from '@/components/hooks/use-user';
 
@@ -28,7 +31,9 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
     const userData = useUser();
     const router = useRouter();
 
-    // const { setTheme } = useTheme();
+    const [value, setValue] = useState<string>(``);
+
+    const input = useRef<any>(null);
 
     if (typeof window !== `undefined` && `Notification` in window) {
         if (Notification.permission === `default` || Notification.permission === `granted`)
@@ -38,16 +43,16 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
     }
 
     const [open, setOpen] = useState<boolean>(false);
-    const [alerts, setAlerts] = useState<{ node_id: number; alert_title: string; alert_content: string; alert_read: boolean; alert_link: string; }[]>([]);
+    const [alerts, setAlerts] = useState<IAlert[]>([]);
 
     useEffect(() => {
         (async () => {
-            const response = await axios.post(`${process.env.BACKEND_URL}/api/user/alerts`, { accessToken: localStorage.getItem(`accessToken`) });
+            const response = await axios.post(`${process.env.BACKEND_URL}/api/user/alerts`, { accessToken: localStorage.getItem(`accessToken`), limit: true });
             if (response.data.status === 200) setAlerts(response.data.data);
         })();
 
         setInterval(async () => {
-            const response = await axios.post(`${process.env.BACKEND_URL}/api/user/alerts`, { accessToken: localStorage.getItem(`accessToken`) });
+            const response = await axios.post(`${process.env.BACKEND_URL}/api/user/alerts`, { accessToken: localStorage.getItem(`accessToken`), limit: true });
 
             if (response.data.status === 200) {
                 const data = response.data.data;
@@ -80,39 +85,44 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
             if (e.key === `j` && (e.metaKey || e.ctrlKey)) {
                 e.preventDefault();
                 setOpen(open => !open);
+
+            } else if (e.key === `Enter`) {
+                if (e.target === input.current) {
+                    setOpen(false);
+                    router.push(`/search?q=${input.current.value}`);
+                }
             }
         }
     
         document.addEventListener(`keydown`, down);
         return (): void => document.removeEventListener(`keydown`, down);
+        
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     return (
         <>
             <CommandDialog open={open} onOpenChange={setOpen}>
-                <CommandInput placeholder="레포지토리 또는 유저 검색..." />
+                <CommandInput ref={input} onValueChange={e => setValue(e)} placeholder="Enter키를 사용해 레포지토리 또는 유저 검색..." />
 
                 <CommandList>
-                    <CommandEmpty>검색된 데이터 없음.</CommandEmpty>
+                    <CommandEmpty>
+                        {`"${value}"`} 와 관련된 레포지토리 또는 유저 검색
+                    </CommandEmpty>
 
-                    <CommandGroup heading="레포지토리">
-                        <CommandItem>
-                            <BookIcon className="mr-2 h-2 w-2" />
-                            <span>고서온 / nextjs-master</span>
-                        </CommandItem>
-                    </CommandGroup>
-
-                    <CommandSeparator />
-
-                    <CommandGroup heading="유저">
-                        <CommandItem>
-                            <UserIcon className="mr-2 h-2 w-2" />
-                            <span>고서온</span>
+                    <CommandGroup heading="문서">
+                        <CommandItem className="group">
+                            <BookOpenIcon className="mr-2 h-2 w-2" />
+                            <span>문서</span>
+                            <Separator className="mx-3 h-[15px]" orientation="vertical" />
+                            <span className="group-hover:text-blue-900 hover:border-blue-900 hover:border-b-[1px] my-0 cursor-pointer" onClick={() => location.href = `https://kithub.gitbook.io/kithub-docs/getting-started/quickstart`}>로직 이해</span>
                         </CommandItem>
 
-                        <CommandItem>
-                            <UserIcon className="mr-2 h-2 w-2" />
-                            <span>서온 고</span>
+                        <CommandItem className="group">
+                            <BookOpenIcon className="mr-2 h-2 w-2" />
+                            <span>문서</span>
+                            <Separator className="mx-3 h-[15px]" orientation="vertical" />
+                            <span className="group-hover:text-blue-900 hover:border-blue-900 hover:border-b-[1px] my-0 cursor-pointer" onClick={() => location.href = `https://kithub.gitbook.io/kithub-docs/getting-started/editor`}>테스팅</span>
                         </CommandItem>
                     </CommandGroup>
                 </CommandList>
@@ -144,22 +154,6 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
                             </button>
                         </div>
 
-                        {/* <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                                <Button variant="outline" size="icon">
-                                    <SunIcon className="h-[1.2rem] w-[1.2rem] rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
-                                    <MoonIcon className="absolute h-[1.2rem] w-[1.2rem] rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
-                                    <span className="sr-only">테마 변경</span>
-                                </Button>
-                            </DropdownMenuTrigger>
-
-                            <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => setTheme(`light`)}>화이트</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setTheme(`dark`)}>다크</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => setTheme(`system`)}>시스템 설정</DropdownMenuItem>
-                            </DropdownMenuContent>
-                        </DropdownMenu> */}
-
                         <Button onClick={() => router.push(`/repositories/topic`)} variant="outline"><ScrollIcon className="w-4 h-4 mr-2" /> 토픽</Button>
 
                         <Button className="hidden md:flex" onClick={() => location.href = `https://github.com/kithub-Inc/kithub`} size="icon"><GithubIcon className="w-4 h-4" /></Button>
@@ -179,7 +173,15 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
 
                                     <PopoverContent className="w-[380px] px-0 py-0 mr-5 mt-5">
                                         <CardHeader>
-                                            <CardTitle>알림</CardTitle>
+                                            <CardTitle onClick={() => router.push(`/alerts`)} className="pb-1 flex justify-between items-center">
+                                                알림
+
+                                                <div className="transition-all hover:bg-slate-100 hover:px-3 hover:py-2 hover:rounded-md cursor-pointer flex items-center">
+                                                    <span className="text-xs">더보기</span>
+                                                    <ChevronRight className="w-4 h-4" />
+                                                </div>
+                                            </CardTitle>
+
                                             <CardDescription>{alerts.filter(e => !e.alert_read).length}개의 읽지 않은 메시지</CardDescription>
                                         </CardHeader>
 
