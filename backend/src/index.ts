@@ -4,11 +4,11 @@
 
 import { FieldPacket, QueryResult } from 'mysql2';
 import { Request, Response } from 'express';
+import { R2 } from 'node-cloudflare-r2';
 import nodemailer from 'nodemailer';
 import otp from 'otp-generator';
+import { OpenAI } from 'openai';
 import crypto from 'crypto';
-import path from 'path';
-import fs from 'fs';
 
 import { accessToken, verify } from './lib/jwt';
 import { Controller } from './lib/framework';
@@ -26,31 +26,64 @@ const transporter = nodemailer.createTransport({
         pass: process.env.GOOGLE_APP_KEY
     }
 });
+const client = new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY,
+    organization: process.env.ORGANIZATION_ID
+});
+const r2 = new R2({
+    accountId: process.env.ACCOUNT_ID || ``,
+    accessKeyId: process.env.ACCESS_KEY_ID || ``,
+    secretAccessKey: process.env.SECRET_ACCESS_KEY || ``
+});
+const bucket = r2.bucket(`object-storage`);
+bucket.provideBucketPublicUrl(process.env.PUBLIC_URL || ``);
 
 
-const recursion = (path: string) => {
-    const data: unknown[] = [];
+const recursion = async (path: string) => {
+    const items = (await bucket.listObjects()).objects;
 
-    fs.readdirSync(`${path}`).forEach(name => {
-        let type: `file` | `folder` = `file`;
-        let content: string | unknown[] = ``;
+    const buildStructure = async (pre: Promise<any[]>, cur: any) => {
+        const splits = cur.key.split(`/`).slice(5);
+        let current = await pre;
 
-        if (fs.lstatSync(`${path}/${name}`).isDirectory()) {
-            content = recursion(`${path}/${name}`);
-            type = `folder`;
-        
-        } else content = fs.readFileSync(`${path}/${name}`, `utf-8`);
+        for (let idx = 0; idx < splits.length; idx++) {
+            const part = splits[idx];
+            const existing = current.find((item: any) => item.name === part);
 
-        data.push({ name, type, content });
-    });
+            if (idx === splits.length - 1) {
+                const content = bucket.getObjectPublicUrls(cur.key)[0];
+                const response = await (await fetch(content)).text();
+                if (!existing) current.push({ path: cur.key, name: part, type: `file`, public: content, content: response });
 
-    return data;
+            } else {
+                if (!existing) {
+                    const newFolder = { path: cur.key, name: part, type: `folder`, public: ``, content: [] };
+                    current.push(newFolder);
+                    current = newFolder.content;
+
+                } else current = existing.content;
+            }
+        }
+
+        return pre;
+    }
+
+    const filter = items.filter(e => `${e.key}`.startsWith(path));
+    return await filter.reduce(buildStructure, Promise.resolve([]));
+}
+
+const getVerify = async (req: any) => {
+    return { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+}
+
+const getGrantes = async (req: any) => {
+    return { data: await RepositoryGrantes.service({ params: { node_id: req.params.repo_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
 }
 
 
 @Control.Service(`post`, `/api/v1/user/otp`)
-class OauthOTP {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class OauthOTP {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `로그인 실패` };
@@ -75,8 +108,8 @@ class OauthOTP {
 }
 
 @Control.Service(`post`, `/api/v1/user/signin`)
-class OauthSignIn {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class OauthSignIn {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `인증메일 전송 실패` };
@@ -86,7 +119,6 @@ class OauthSignIn {
             
             if (result && Array.isArray(result[0]) && result[0][0]) {
                 const data = result[0][0] as { user_email: string; };
-    
                 const code = otp.generate(4, { upperCaseAlphabets: false, specialChars: false });
     
                 await mysql.execute(`INSERT INTO otps (user_email, code) VALUES (?, ?)`, [data.user_email, code]);
@@ -108,8 +140,8 @@ class OauthSignIn {
 }
 
 @Control.Service(`post`, `/api/v1/user/signup`)
-class OauthSignUp {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class OauthSignUp {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `회원가입 실패` };
@@ -119,7 +151,6 @@ class OauthSignUp {
             
             if (result && Array.isArray(result[0]) && !result[0][0]) {
                 const insert = await mysql.execute(`INSERT INTO users (user_email, user_password) VALUES (?, ?)`, [req.body.user_email, crypto.createHash(`sha512`).update(req.body.user_password).digest(`hex`)]);
-                fs.mkdirSync(`data/${req.body.user_email}`, { recursive: true });
                 
                 if (insert) {
                     response.status = 200;
@@ -133,11 +164,11 @@ class OauthSignUp {
 }
 
 @Control.Service(`post`, `/api/v1/user/verify`)
-class OauthVerify {
-    public static async service(req: Request, res: Response): Promise<Status> {
+export class OauthVerify {
+    public static async service(req: Request, res: Response, name?: any): Promise<Status> {
         res.setHeader(`Content-type`, `application/json`);
         
-        const response: { data?: { node_id?: number; user_email?: string; user_name?: string; user_bio?: string; } | undefined; status: number; message?: string; } = verify(req.body.accessToken);
+        const response: { data?: { node_id?: number; user_email?: string; user_name?: any; user_bio?: string; } | undefined; status: number; message?: string; } = verify(req.body.accessToken);
         response.status = 400;
         response.message = `로그인 정보 확인 실패`;
 
@@ -166,8 +197,8 @@ class OauthVerify {
 
 
 @Control.Service(`get`, `/api/user/:user_email`)
-class User {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class User {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
         
         const response: Status = { status: 400, message: `유저 불러오기 실패` };
@@ -185,13 +216,12 @@ class User {
 }
 
 @Control.Service(`post`, `/api/view-private`)
-class UserViewPrivate {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserViewPrivate {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `레포지토리 목록 불러오기 실패` };
-        
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
             const result = await mysql.execute(`SELECT U.user_name, R.* FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.user_email = ? ORDER BY R.created_at DESC`, [req.body.user_email]);
@@ -208,12 +238,12 @@ class UserViewPrivate {
 }
 
 @Control.Service(`post`, `/api/user/devices`)
-class UserDevices {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserDevices {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
         
         const response: Status = { status: 400, message: `디바이스 목록 불러오기 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200) {
             const result = await mysql.execute(`SELECT * FROM user_device WHERE user_email = ?`, [verify.data.data.user_email]);
@@ -230,12 +260,12 @@ class UserDevices {
 }
 
 @Control.Service(`post`, `/api/user/device/remove`)
-class UserDeviceRemove {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserDeviceRemove {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
         
         const response: Status = { status: 400, message: `디바이스 제거 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200) {
             const result = await mysql.execute(`DELETE FROM user_device WHERE user_email = ? AND device_agent = ?`, [verify.data.data.user_email, req.body.agent]);
@@ -251,12 +281,12 @@ class UserDeviceRemove {
 }
 
 @Control.Service(`post`, `/api/user/alerts`)
-class UserAlerts {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserAlerts {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
         
         const response: Status = { status: 400, message: `알림 목록 불러오기 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200) {
             let result: any;
@@ -276,12 +306,12 @@ class UserAlerts {
 }
 
 @Control.Service(`post`, `/api/user/alert`)
-class UserAlert {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserAlert {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
         
         const response: Status = { status: 400, message: `알림 읽기 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200) {
             req.body.ids.forEach(async (id: number) => await mysql.execute(`UPDATE user_alert SET alert_read = 1 WHERE node_id = ? AND user_email = ?`, [id, verify.data.data.user_email]));
@@ -295,20 +325,16 @@ class UserAlert {
 }
 
 @Control.Service(`post`, `/api/user/modify/avatar`)
-class UserModifyAvatar {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserModifyAvatar {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `아바타 수정 실패` };
-
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email && req.file) {
             let update;
-            let path: string = ``;
-            path = `/uploads/${req.file.filename}`;
-            
-            if (path !== ``) update = await mysql.execute(`UPDATE users SET avatar_src = ? WHERE user_email = ?`, [path, req.body.user_email]);
+            if (name) update = await mysql.execute(`UPDATE users SET avatar_src = ? WHERE user_email = ?`, [`${process.env.PUBLIC_URL}/${name.key}`, req.body.user_email]);
     
             if (update) {
                 response.status = 200;
@@ -321,13 +347,12 @@ class UserModifyAvatar {
 }
 
 @Control.Service(`post`, `/api/user/modify/name`)
-class UserModifyName {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserModifyName {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `이름 수정 실패` };
-        
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
             const update = await mysql.execute(`UPDATE users SET user_name = ? WHERE user_email = ?`, [req.body.user_name, req.body.user_email]);
@@ -343,13 +368,12 @@ class UserModifyName {
 }
 
 @Control.Service(`post`, `/api/user/modify/bio`)
-class UserModifyBio {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserModifyBio {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `설명 수정 실패` };
-        
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
             const update = await mysql.execute(`UPDATE users SET user_bio = ? WHERE user_email = ?`, [req.body.user_bio, req.body.user_email]);
@@ -365,13 +389,12 @@ class UserModifyBio {
 }
 
 @Control.Service(`post`, `/api/user/modify/password`)
-class UserModifyPassword {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserModifyPassword {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `비밀번호 수정 실패` };
-        
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
             const update = await mysql.execute(`UPDATE users SET user_password = ? WHERE user_email = ?`, [crypto.createHash(`sha512`).update(req.body.user_password).digest(`hex`), req.body.user_email]);
@@ -386,31 +409,13 @@ class UserModifyPassword {
     }
 }
 
-@Control.Service(`get`, `/api/:user_email/avatar`)
-class UserAvatar {
-    public static async service(req: Request, res: Response): Promise<void> {
-        const result = await mysql.execute(`SELECT avatar_src FROM users WHERE user_email = ?`, [req.params.user_email]);
-
-        if (result && Array.isArray(result[0]) && result[0][0]) {
-            const url: string = path.join(`${__dirname}/../data/${(result[0][0] as any).avatar_src}`);
-    
-            if (fs.existsSync(url)) {
-                const file = fs.readFileSync(url);
-        
-                res.setHeader(`Content-type`, `image/png`);
-                res.send(file);
-            }
-        }
-    }
-}
-
 @Control.Service(`post`, `/api/user/follow`)
-class UserFollow {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserFollow {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `팔로우 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200 && verify.data.data.user_email !== req.body.user_email) {
             const result = await mysql.execute(`SELECT * FROM user_follow WHERE user_email = ? AND target_email = ?`, [verify.data.data.user_email, req.body.user_email]);
@@ -430,8 +435,8 @@ class UserFollow {
 }
 
 @Control.Service(`get`, `/api/:user_email/following`)
-class UserFollowing {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserFollowing {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `팔로잉 목록 불러오기 실패` };
@@ -448,8 +453,8 @@ class UserFollowing {
 }
 
 @Control.Service(`get`, `/api/:user_email/follower`)
-class UserFollower {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class UserFollower {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `팔로워 목록 불러오기 실패` };
@@ -467,8 +472,8 @@ class UserFollower {
 
 
 @Control.Service(`get`, `/api/:user_email/repositories`)
-class Repositories {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class Repositories {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `레포지토리 목록 불러오기 실패` };
@@ -485,8 +490,8 @@ class Repositories {
 }
 
 @Control.Service(`get`, `/api/repository/:node_id`)
-class Repository {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class Repository {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `레포지토리 불러오기 실패` };
@@ -505,8 +510,8 @@ class Repository {
 }
 
 @Control.Service(`get`, `/api/repository/:node_id/grantes`)
-class RepositoryGrantes {
-    public static async service(req: Request, res: Response): Promise<Status> {
+export class RepositoryGrantes {
+    public static async service(req: Request, res: Response, name?: any): Promise<Status> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `권한 목록 불러오기 실패` };
@@ -523,27 +528,9 @@ class RepositoryGrantes {
     }
 }
 
-@Control.Service(`get`, `/api/repository/:node_id/topic_image`)
-class RepositoryTopicImage {
-    public static async service(req: Request, res: Response): Promise<void> {
-        const result = await mysql.execute(`SELECT image_src FROM repositories WHERE node_id = ?`, [req.params.node_id]);
-        
-        if (result && Array.isArray(result[0]) && result[0][0]) {
-            const url: string = path.join(`${__dirname}/../data/${(result[0][0] as any).image_src}`);
-    
-            if (fs.existsSync(url)) {
-                const file = fs.readFileSync(url);
-        
-                res.setHeader(`Content-type`, `image/png`);
-                res.send(file);
-            }
-        }
-    }
-}
-
 @Control.Service(`get`, `/api/repository/:node_id/branches`)
-class RepositoryBranches {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranches {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `브랜치 목록 불러오기 실패` };
@@ -560,8 +547,8 @@ class RepositoryBranches {
 }
 
 @Control.Service(`get`, `/api/repository/:repo_id/branch/:node_id`)
-class RepositoryBranch {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranch {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `브랜치 불러오기 실패` };
@@ -578,8 +565,8 @@ class RepositoryBranch {
 }
 
 @Control.Service(`get`, `/api/repository/:repo_id/branch/:node_id/directory`)
-class RepositoryBranchDirectory {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranchDirectory {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `디렉터리 불러오기 실패` };
@@ -597,7 +584,7 @@ class RepositoryBranchDirectory {
             if (lastCommit && Array.isArray(lastCommit[0]) && lastCommit[0][0]) {
                 const commit = lastCommit[0][0] as { commit_src: string; };
 
-                response.data = recursion(`${commit.commit_src}`);
+                response.data = await recursion(`${commit.commit_src}`);
                 response.data.sort((a: { type: string; }, b: { type: string; }) => {
                     if (a.type === `folder` && b.type !== `folder`) return -1;
                     else if (a.type !== `folder` && b.type === `folder`) return 1;
@@ -611,8 +598,8 @@ class RepositoryBranchDirectory {
 }
 
 @Control.Service(`get`, `/api/repository/:repo_id/branch/:node_id/commits`)
-class RepositoryBranchCommits {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranchCommits {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `커밋 목록 불러오기 실패` };
@@ -629,8 +616,8 @@ class RepositoryBranchCommits {
 }
 
 @Control.Service(`get`, `/api/repository/:repo_id/branch/:branch_id/commit/:node_id`)
-class RepositoryBranchCommit {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranchCommit {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `커밋 불러오기 실패` };
@@ -647,8 +634,8 @@ class RepositoryBranchCommit {
 }
 
 @Control.Service(`get`, `/api/repository/:repo_id/branch/:branch_id/commit/:node_id/directory`)
-class RepositoryBranchCommitDirectory {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranchCommitDirectory {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `디렉터리 불러오기 실패` };
@@ -660,7 +647,7 @@ class RepositoryBranchCommitDirectory {
             response.status = 200;
             response.message = `디렉터리 불러오기 성공`;
     
-            response.data = recursion(`${commit.commit_src}`);
+            response.data = await recursion(`${commit.commit_src}`);
             response.data.sort((a: { type: string; }, b: { type: string; }) => {
                 if (a.type === `folder` && b.type !== `folder`) return -1;
                 else if (a.type !== `folder` && b.type === `folder`) return 1;
@@ -673,8 +660,8 @@ class RepositoryBranchCommitDirectory {
 }
 
 @Control.Service(`get`, `/api/repository/:repo_id/branch/:branch_id/commit/:node_id/directory/prev`)
-class RepositoryBranchPrevCommitDirectory {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranchPrevCommitDirectory {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `디렉터리 불러오기 실패` };
@@ -686,7 +673,7 @@ class RepositoryBranchPrevCommitDirectory {
             response.status = 200;
             response.message = `디렉터리 불러오기 성공`;
     
-            response.data = recursion(`${commit.commit_src}`);
+            response.data = await recursion(`${commit.commit_src}`);
             response.data.sort((a: { type: string; }, b: { type: string; }) => {
                 if (a.type === `folder` && b.type !== `folder`) return -1;
                 else if (a.type !== `folder` && b.type === `folder`) return 1;
@@ -699,8 +686,8 @@ class RepositoryBranchPrevCommitDirectory {
 }
 
 @Control.Service(`get`, `/api/repository/:node_id/issues`)
-class RepositoryIssues {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssues {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `이슈 목록 불러오기 실패` };
@@ -717,8 +704,8 @@ class RepositoryIssues {
 }
 
 @Control.Service(`get`, `/api/repository/:repo_id/issue/:node_id`)
-class RepositoryIssue {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssue {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `이슈 불러오기 실패` };
@@ -735,8 +722,8 @@ class RepositoryIssue {
 }
 
 @Control.Service(`get`, `/api/repository/:repo_id/issue/:node_id/comments`)
-class RepositoryIssueComments {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssueComments {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `이슈 댓글 목록 불러오기 실패` };
@@ -760,12 +747,12 @@ class RepositoryIssueComments {
 }
 
 @Control.Service(`post`, `/api/repository/:node_id/issue/create`)
-class RepositoryIssueCreate {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssueCreate {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `이슈 작성 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200) {
             const insert = await mysql.execute(`INSERT INTO repository_issue (repo_id, user_email, issue_title, issue_content, issue_status) VALUES (?, ?, ?, ?, ?)`, [req.params.node_id, verify.data.data.user_email, req.body.issue_title, req.body.issue_content, `대기`]);
@@ -782,12 +769,12 @@ class RepositoryIssueCreate {
 }
 
 @Control.Service(`post`, `/api/repository/:repo_id/issue/:node_id/comment/create`)
-class RepositoryIssueCommentCreate {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssueCommentCreate {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `이슈 댓글 작성 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200) {
             const insert = await mysql.execute(`INSERT INTO repository_issue_comment (issue_id, user_email, comment_content, comment_type, comment_target_id) VALUES (?, ?, ?, ?, ?)`, [req.params.node_id, verify.data.data.user_email, req.body.comment_content, req.body.reply ? `reply` : `default`, req.body.reply || null]);
@@ -804,15 +791,15 @@ class RepositoryIssueCommentCreate {
 }
 
 @Control.Service(`post`, `/api/repository/:repo_id/issue/:node_id/status`)
-class RepositoryIssueStatus {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssueStatus {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `상태 변경 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (verify.data.status === 200) {
-            const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.repo_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
+            const grantes: any = getGrantes(req);
 
             if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email)) {
                 await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT RI.user_email, 0, ?, CONCAT("상태 변경: @", IFNULL(R_U.user_name, R_U.user_email), "/", R.repo_name, " [", RI.issue_title, "]"), CONCAT("이슈 상태가 \`", RI.issue_status, "\` 에서 \`", ?, "\` (으)로 변경되었습니다.") FROM repositories AS R JOIN users AS R_U JOIN repository_issue AS RI ON R.user_email = R_U.user_email AND RI.repo_id = R.node_id WHERE RI.node_id = ?`, [`/repositories/${req.params.repo_id}/issues/${req.params.node_id}`, req.body.status, req.params.node_id]);
@@ -831,12 +818,12 @@ class RepositoryIssueStatus {
 
 
 @Control.Service(`post`, `/api/repository/create`)
-class RepositoryCreate {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryCreate {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `레포지토리 생성 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
 
         if (verify.data.status === 200) {
             const result = await mysql.execute(`SELECT node_id FROM repositories ORDER BY created_at DESC LIMIT 1`);
@@ -855,22 +842,19 @@ class RepositoryCreate {
             });
     
             const branch_src: string = `data/${req.body.user_email}/${data.node_id + 1}/main`;
-            fs.mkdirSync(branch_src, { recursive: true });
     
             const lastId = await mysql.execute(`SELECT node_id FROM repository_branch_commit ORDER BY created_at DESC LIMIT 1`);
             let id: number = 1;
     
             if (lastId && Array.isArray(lastId[0]) && lastId[0][0]) id = (lastId[0][0] as { node_id: number; }).node_id + 1;
     
-            fs.mkdirSync(`${branch_src}/${id}`, { recursive: true });
-            fs.writeFileSync(`${branch_src}/${id}/readme.md`, `## ${req.body.repo_name}`);
-            const branch: any = await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src.substring(5) ]);
+            await bucket.upload(`## ${req.body.repo_name}`, `${branch_src}/${id}/readme.md`);
+            const branch: any = await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src ]);
             await mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [branch[0].insertId, `${branch_src}/${id}`, `main branch initial`]);
     
-            fs.mkdirSync(`data/${req.body.user_email}/${data.node_id + 1}`, { recursive: true });
             let path: string = ``;
-            if (req.file) path = `/uploads/${req.file?.filename}`;
-            const insert = await mysql.execute(`INSERT INTO repositories (node_id, user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [data.node_id + 1, req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path ]);
+            if (name) path = `${process.env.PUBLIC_URL}/${name.key}`;
+            const insert = await mysql.execute(`INSERT INTO repositories (node_id, user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [data.node_id + 1, req.body.user_email, req.body.repo_name, req.body.description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path ]);
             grantes.forEach(async (e: { user_email: string; type: string }) => await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]));
     
             if (insert) {
@@ -884,14 +868,14 @@ class RepositoryCreate {
 }
 
 @Control.Service(`post`, `/api/repository/modify`)
-class RepositoryModify {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryModify {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `레포지토리 수정 실패` };
 
         const result = await mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.body.node_id]);
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
         
         if (result && Array.isArray(result[0]) && result[0][0]) {
             const data = result[0][0] as { user_email: string; }
@@ -900,7 +884,7 @@ class RepositoryModify {
             if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
                 let update;
                 let path: string = ``;
-                if (req.file) path = `/uploads/${req.file?.filename}`;
+                if (name) path = `${process.env.PUBLIC_URL}/${name.key}`;
                 
                 const { repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, node_id } = req.body;
                 if (path === ``) update = await mysql.execute(`UPDATE repositories SET repo_name = ?, repo_description = ?, repo_category = ?, repo_subcategory = ?, repo_visibility = ?, repo_archive = ?, repo_license = ? WHERE node_id = ?`, [repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, node_id]);
@@ -924,12 +908,12 @@ class RepositoryModify {
 }
 
 @Control.Service(`post`, `/api/repository/fork`)
-class RepositoryFork {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryFork {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `레포지토리 포크 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
 
         if (verify.data.status === 200) {
             const result = await mysql.execute(`SELECT node_id FROM repositories ORDER BY created_at DESC LIMIT 1`);
@@ -948,21 +932,18 @@ class RepositoryFork {
             });
     
             const branch_src: string = `data/${req.body.user_email}/${data.node_id + 1}/main`;
-            fs.mkdirSync(branch_src, { recursive: true });
     
             const lastId = await mysql.execute(`SELECT node_id FROM repository_branch_commit ORDER BY created_at DESC LIMIT 1`);
             let id: number = 1;
     
             if (lastId && Array.isArray(lastId[0]) && lastId[0][0]) id = (lastId[0][0] as { node_id: number; }).node_id + 1;
 
-            fs.mkdirSync(`${branch_src}/${id}`, { recursive: true });
-            fs.writeFileSync(`${branch_src}/${id}/readme.md`, `## ${req.body.repo_name}`);
-            const branch: any = await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src.substring(5) ]);
+            await bucket.upload(`## ${req.body.repo_name}`, `${branch_src}/${id}/readme.md`);
+            const branch: any = await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src ]);
             await mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [branch[0].insertId, `${branch_src}/${id}`, `main branch initial`]);
     
-            fs.mkdirSync(`data/${req.body.user_email}/${data.node_id + 1}`, { recursive: true });
             let path: string = ``;
-            if (req.file) path = `/uploads/${req.file?.filename}`;
+            if (name) path = `${process.env.PUBLIC_URL}/${name.key}`;
             const insert = await mysql.execute(`INSERT INTO repositories (node_id, repo_type, user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, "forked", ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [data.node_id + 1, req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path ]);
             grantes.forEach(async (e: { user_email: string; type: string }) => await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]));
     
@@ -977,17 +958,17 @@ class RepositoryFork {
 }
 
 @Control.Service(`post`, `/api/repository/:node_id/push`)
-class RepositoryBranchPush {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranchPush {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `커밋 일괄처리 실패` };
 
-        const result = await mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.node_id]);
+        const repositoryResult = await mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.node_id]);
         const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
 
-        if (result && Array.isArray(result[0]) && result[0][0]) {
-            const data = result[0][0] as { user_email: string; };
+        if (repositoryResult && Array.isArray(repositoryResult[0]) && repositoryResult[0][0]) {
+            const data = repositoryResult[0][0] as { user_email: string; };
             const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.node_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
             
             if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email)) {
@@ -996,9 +977,7 @@ class RepositoryBranchPush {
                 if (result && Array.isArray(result[0])) {
                     if (result[0].length === 0) {
                         const branch_src: string = `data/${verify.data.data.user_email}/${req.params.node_id}/${req.body.branch}`;
-                        fs.mkdirSync(branch_src, { recursive: true });
-            
-                        await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [req.params.node_id, req.body.branch, branch_src.substring(5) ]);
+                        await mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [req.params.node_id, req.body.branch, branch_src ]);
                     }
 
                     const reResult = await mysql.execute(`SELECT * FROM repository_branch WHERE repo_id = ? AND branch_name = ?`, [req.params.node_id, req.body.branch]);
@@ -1015,25 +994,60 @@ class RepositoryBranchPush {
                             if (lastId && Array.isArray(lastId[0]) && lastId[0][0]) id = (lastId[0][0] as { node_id: number; }).node_id + 1;
                         }
                         
-                        const path: string = `data/${data.branch_src}/${id}`;
-                        if (id - 1 > 0 && fs.existsSync(`data/${data.branch_src}/${id - 1}`)) fs.cpSync(`data/${data.branch_src}/${id - 1}`, path, { recursive: true });
-                        else fs.mkdirSync(path, { recursive: true });
-                        
-                        req.body.commits.forEach((e: { name: string; file: string; }) => {
-                            const paths = e.name.split(`/`);
-                            if (paths.length > 1) {
-                                paths.forEach((e_, idx) => {
-                                    if (idx + 1 !== paths.length) fs.mkdirSync(`${path}/${e_}`, { recursive: true });
-                                });
+                        const recursionSecond = async (path: string) => {
+                            const recursionResult = await recursion(path);
+                            
+                            if (id - 1 > 0 && recursionResult.length > 0) {
+                                for (let i = 0; i < recursionResult.length; i++) {
+                                    if (recursionResult[i].type === `file`) {
+                                        const response = await (await fetch(recursionResult[i].public)).text();
+                                        await bucket.uploadStream(response, `${data.branch_src}/${id}/${recursionResult[i].name}`);
+                                        
+                                    } else {
+                                        console.log(`${data.branch_src}/${id}/${recursionResult[i].name}`);
+                                        await recursionSecond(`${data.branch_src}/${id}/${recursionResult[i].name}`);
+                                    }
+                                }
                             }
+                        }
+                        const path: string = `${data.branch_src}/${id - 1}`;
+                        await recursionSecond(path);
 
-                            if (fs.existsSync(`${path}/${e.name}`)) fs.unlinkSync(`${path}/${e.name}`);
-                            if (e.file) fs.writeFileSync(`${path}/${e.name}`, e.file);
-                            else fs.writeFileSync(`${path}/${e.name}`, ``);
+                        const newPath: string = `${data.branch_src}/${id}`;
+                        
+                        req.body.commits.forEach(async (e: { type: string; name: string; file: string; }) => {
+                            if (e.type === `add`) {
+                                if (await bucket.objectExists(`${newPath}/${e.name}`)) {
+                                    await bucket.deleteObject(`${newPath}/${e.name}`);
+                                }
+                                
+                                if (e.file) await bucket.upload(e.file, `${newPath}/${e.name}`);
+                                else await bucket.upload(``, `${newPath}/${e.name}`);
+
+                            } else if (e.type === `remove`) {
+                                if (await bucket.objectExists(`${newPath}/${e.name}`)) await bucket.deleteObject(`${newPath}/${e.name}`);
+                            }
                         });
 
-                        const insert = await mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [data.node_id, `${path}`, req.body.commits[req.body.commits.length - 1].message]);
+                        const insert = await mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [data.node_id, newPath, req.body.message || `메시지 없음`]);
                         await mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT RA.target_email, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), CONCAT("\`", ?, "\` 브랜치에 커밋 일괄처리가 되었습니다.") FROM repositories AS R JOIN users U JOIN repository_authorities AS RA ON R.user_email = U.user_email AND RA.repo_id = R.node_id WHERE R.node_id = ?`, [`/repositories/${req.params.node_id}`, req.body.branch, req.params.node_id]);
+
+                        let description = (repositoryResult[0][0] as any).repo_description?.trim() || ``;
+                        if (!description) {
+                            const chat = await client.chat.completions.create({
+                                model: `gpt-4o-mini`,
+                                temperature: .7,
+                                max_tokens: 48,
+                                top_p: 1,
+                                messages: [
+                                    { role: `system`, content: `코드를 훑어보고 어떤 목적으로 작성한건지 단 한줄 이내의 완벽히 간략한 설명을 작성해야해.\n모든 불필요한 말과 마침표를 제외해줘.\n예시) 제 2의 클라우드 컴퓨팅 겸 레포지토리 호스팅 서비스` },
+                                    { role: `user`, content: req.body.commits.reduce((pre: any, cur: any) => [...pre, `\`\`\`\n${cur.file}\n\`\`\``], []).join(`\n\n`) },
+                                ],
+                            });
+                            description = chat.choices[0].message.content;
+                        }
+
+                        await mysql.execute(`UPDATE repositories SET repo_description = ? WHERE node_id = ?`, [description, req.params.node_id])
             
                         if (insert) {
                             response.status = 200;
@@ -1048,9 +1062,45 @@ class RepositoryBranchPush {
     }
 }
 
-@Control.Service(`post`, `/api/repository/:node_id/pullrequest`)
-class RepositoryPullRequest {
-    public static async service(req: Request, res: Response): Promise<void> {
+@Control.Service(`get`, `/api/repository/:node_id/pullrequests`)
+export class RepositoryPullRequests {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `풀리퀘스트 목록 불러오기 실패` };
+        const result = await mysql.execute(`SELECT * FROM repository_pullrequest WHERE target_repo_id = ? ORDER BY created_at DESC`, [req.params.node_id]);
+
+        if (result && Array.isArray(result[0])) {
+            response.status = 200;
+            response.message = `풀리퀘스트 목록 불러오기 성공`;
+            response.data = result[0];
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
+@Control.Service(`get`, `/api/repository/:repo_id/pullrequest/:node_id`)
+export class RepositoryPullRequest {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
+        res.setHeader(`Content-type`, `application/json`);
+
+        const response: Status = { status: 400, message: `풀리퀘스트 불러오기 실패` };
+        const result = await mysql.execute(`SELECT * FROM repository_pullrequest WHERE node_id = ? ORDER BY created_at DESC`, [req.params.node_id]);
+
+        if (result && Array.isArray(result[0]) && result[0][0]) {
+            response.status = 200;
+            response.message = `풀리퀘스트 불러오기 성공`;
+            response.data = result[0][0];
+        }
+
+        res.send(JSON.stringify(response));
+    }
+}
+
+@Control.Service(`post`, `/api/repository/:node_id/pullrequest/create`)
+export class RepositoryPullRequestCreate {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `풀리퀘스트 전송 실패` };
@@ -1059,18 +1109,10 @@ class RepositoryPullRequest {
         const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
 
         if (result && Array.isArray(result[0]) && result[0][0] && verify.data.status === 200) {
-            const lastId = await mysql.execute(`SELECT * FROM repository_pullrequest ORDER BY created_at DESC LIMIT 1`);
+            await mysql.execute(`INSERT INTO repository_pullrequest (repo_id, target_repo_id, user_email, pr_type, branch_name, target_branch_name, commit_id, pr_title, pr_content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [req.body.repo_id, req.body.target_repo_id, verify.data.data.user_email, `대기`, req.body.branch_name, req.body.target_branch_name, req.body.commit_id, req.body.pr_title, req.body.pr_content]);
 
-            if (lastId && Array.isArray(lastId[0]) && lastId[0][0]) {
-                const src = `/${verify.data.data.user_email}/pullrequests/${(lastId[0][0] as any).node_id}`;
-                fs.mkdirSync(`/${verify.data.data.user_email}/pullrequests`, { recursive: true });
-                fs.mkdirSync(src, { recursive: true });
-
-                await mysql.execute(`INSERT INTO repository_pullrequest (repo_id, user_email, branch_name, pr_src) VALUES (?, ?, ?, ?)`, [req.params.node_id, verify.data.data.user_email, req.body.branch_name, src]);
-    
-                response.status = 200;
-                response.message = `풀리퀘스트 전송 성공`;
-            }
+            response.status = 200;
+            response.message = `풀리퀘스트 전송 성공`;
         }
 
         res.send(JSON.stringify(response));
@@ -1078,8 +1120,8 @@ class RepositoryPullRequest {
 }
 
 @Control.Service(`post`, `/api/repository/:repo_id/branch/:node_id/remove`)
-class RepositoryBranchRemove {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryBranchRemove {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `브랜치 삭제 실패` };
@@ -1091,12 +1133,12 @@ class RepositoryBranchRemove {
 
         if (result && Array.isArray(result[0]) && result[0][0] && branch && Array.isArray(branch[0]) && branch[0][0]) {
             const data = result[0][0] as { user_email: string; };
-            const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.repo_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
+            const grantes: any = getGrantes(req);
             
             if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
                 await mysql.execute(`DELETE FROM repository_branch WHERE node_id = ?`, [req.params.node_id]);
                 await mysql.execute(`DELETE FROM repository_branch_commit WHERE branch_id = ?`, [req.params.node_id]);
-                fs.rmSync(path.join(`${__dirname}/../data/${data.user_email}/${req.params.repo_id}/${(branch[0][0] as any).branch_name}`), { recursive: true, force: true });
+                await bucket.deleteObject(`/data/${data.user_email}/${req.params.repo_id}/${(branch[0][0] as any).branch_name}`);
 
                 response.status = 200;
                 response.message = `브랜치 삭제 성공`;
@@ -1108,8 +1150,8 @@ class RepositoryBranchRemove {
 }
 
 @Control.Service(`post`, `/api/repository/:node_id/remove`)
-class RepositoryRemove {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryRemove {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `레포지토리 삭제 실패` };
@@ -1126,7 +1168,7 @@ class RepositoryRemove {
                 await mysql.execute(`DELETE FROM repositories WHERE node_id = ?`, [req.params.node_id]);
                 await mysql.execute(`DELETE FROM repository_branch WHERE repo_id = ?`, [req.params.node_id]);
                 await mysql.execute(`DELETE FROM repository_authorities WHERE repo_id = ?`, [req.params.node_id]);
-                fs.rmSync(path.join(`${__dirname}/../data/${data.user_email}/${req.params.node_id}`), { recursive: true, force: true });
+                await bucket.deleteObject(`/data/${data.user_email}/${req.params.node_id}`);
 
                 response.status = 200;
                 response.message = `레포지토리 삭제 성공`;
@@ -1138,8 +1180,8 @@ class RepositoryRemove {
 }
 
 @Control.Service(`post`, `/api/repository/:repo_id/issue/:node_id/remove`)
-class RepositoryIssueRemove {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssueRemove {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `이슈 삭제 실패` };
@@ -1149,7 +1191,7 @@ class RepositoryIssueRemove {
 
         if (result && Array.isArray(result[0]) && result[0][0]) {
             const data = result[0][0] as { user_email: string; };
-            const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.repo_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
+            const grantes: any = getGrantes(req);
             
             if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
                 await mysql.execute(`DELETE FROM repository_issue WHERE node_id = ?`, [req.params.node_id]);
@@ -1164,8 +1206,8 @@ class RepositoryIssueRemove {
 }
 
 @Control.Service(`post`, `/api/repository/:repo_id/issue/:issue_id/comments/:node_id/remove`)
-class RepositoryIssueCommentRemove {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssueCommentRemove {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `댓글 삭제 실패` };
@@ -1175,7 +1217,7 @@ class RepositoryIssueCommentRemove {
 
         if (result && Array.isArray(result[0]) && result[0][0]) {
             const data = result[0][0] as { user_email: string; };
-            const grantes: any = { data: await RepositoryGrantes.service({ params: { node_id: req.params.repo_id } } as any, { send: () => {}, setHeader: () => {} } as any) };
+            const grantes: any = getGrantes(req);
             
             if (grantes.data.data.find((e: any) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
                 await mysql.execute(`DELETE FROM repository_issue_comment WHERE node_id = ?`, [req.params.node_id]);
@@ -1192,8 +1234,8 @@ class RepositoryIssueCommentRemove {
 
 
 @Control.Service(`get`, `/api/repository/:node_id/stars`)
-class RepositoryStars {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryStars {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `스타 목록 불러오기 실패` };
@@ -1211,12 +1253,12 @@ class RepositoryStars {
 }
 
 @Control.Service(`post`, `/api/repository/:node_id/star`)
-class RepositoryStar {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryStar {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `스타 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
 
         if (verify.data.status === 200) {
             const result = await mysql.execute(`SELECT * FROM repository_star WHERE repo_id = ? AND user_email = ?`, [req.params.node_id, verify.data.data.user_email]);
@@ -1238,12 +1280,12 @@ class RepositoryStar {
 }
 
 @Control.Service(`post`, `/api/repository/:repo_id/issue/:issue_id/comment/:node_id/heart`)
-class RepositoryIssueCommentHeart {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class RepositoryIssueCommentHeart {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `하트 실패` };
-        const verify: any = { data: await OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } } as any, { send: () => {}, setHeader: () => {} } as any) };
+        const verify: any = await getVerify(req);
 
         if (verify.data.status === 200) {
             const result = await mysql.execute(`SELECT * FROM repository_issue_comment_heart WHERE comment_id = ? AND user_email = ?`, [req.params.node_id, verify.data.data.user_email]);
@@ -1266,8 +1308,8 @@ class RepositoryIssueCommentHeart {
 
 
 @Control.Service(`get`, `/api/topics/:category`)
-class Topics {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class Topics {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `토픽 목록 불러오기 실패` };
@@ -1287,8 +1329,8 @@ class Topics {
 }
 
 @Control.Service(`get`, `/api/categories`)
-class Categories {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class Categories {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `카테고리 목록 불러오기 실패` };
@@ -1306,8 +1348,8 @@ class Categories {
 
 
 @Control.Service(`get`, `/api/search`)
-class Search {
-    public static async service(req: Request, res: Response): Promise<void> {
+export class Search {
+    public static async service(req: Request, res: Response, name?: any): Promise<void> {
         res.setHeader(`Content-type`, `application/json`);
 
         const response: Status = { status: 400, message: `검색 실패` };
@@ -1326,5 +1368,5 @@ class Search {
     }
 }
 
-Control.setRoutes();
+Control.setRoutes(r2.r2);
 Control.spawnListen();

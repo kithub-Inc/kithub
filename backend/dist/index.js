@@ -53,11 +53,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.Search = exports.Categories = exports.Topics = exports.RepositoryIssueCommentHeart = exports.RepositoryStar = exports.RepositoryStars = exports.RepositoryIssueCommentRemove = exports.RepositoryIssueRemove = exports.RepositoryRemove = exports.RepositoryBranchRemove = exports.RepositoryPullRequestCreate = exports.RepositoryPullRequest = exports.RepositoryPullRequests = exports.RepositoryBranchPush = exports.RepositoryFork = exports.RepositoryModify = exports.RepositoryCreate = exports.RepositoryIssueStatus = exports.RepositoryIssueCommentCreate = exports.RepositoryIssueCreate = exports.RepositoryIssueComments = exports.RepositoryIssue = exports.RepositoryIssues = exports.RepositoryBranchPrevCommitDirectory = exports.RepositoryBranchCommitDirectory = exports.RepositoryBranchCommit = exports.RepositoryBranchCommits = exports.RepositoryBranchDirectory = exports.RepositoryBranch = exports.RepositoryBranches = exports.RepositoryGrantes = exports.Repository = exports.Repositories = exports.UserFollower = exports.UserFollowing = exports.UserFollow = exports.UserModifyPassword = exports.UserModifyBio = exports.UserModifyName = exports.UserModifyAvatar = exports.UserAlert = exports.UserAlerts = exports.UserDeviceRemove = exports.UserDevices = exports.UserViewPrivate = exports.User = exports.OauthVerify = exports.OauthSignUp = exports.OauthSignIn = exports.OauthOTP = void 0;
+const node_cloudflare_r2_1 = require("node-cloudflare-r2");
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const otp_generator_1 = __importDefault(require("otp-generator"));
 const crypto_1 = __importDefault(require("crypto"));
-const path_1 = __importDefault(require("path"));
-const fs_1 = __importDefault(require("fs"));
 const jwt_1 = require("./lib/jwt");
 const framework_1 = require("./lib/framework");
 const mysql_1 = require("./lib/mysql");
@@ -72,28 +72,55 @@ const transporter = nodemailer_1.default.createTransport({
         pass: process.env.GOOGLE_APP_KEY
     }
 });
-const recursion = (path) => {
-    const data = [];
-    fs_1.default.readdirSync(`${path}`).forEach(name => {
-        let type = `file`;
-        let content = ``;
-        if (fs_1.default.lstatSync(`${path}/${name}`).isDirectory()) {
-            content = recursion(`${path}/${name}`);
-            type = `folder`;
+const r2 = new node_cloudflare_r2_1.R2({
+    accountId: process.env.ACCOUNT_ID || ``,
+    accessKeyId: process.env.ACCESS_KEY_ID || ``,
+    secretAccessKey: process.env.SECRET_ACCESS_KEY || ``
+});
+const bucket = r2.bucket(`object-storage`);
+bucket.provideBucketPublicUrl(process.env.PUBLIC_URL || ``);
+const recursion = (path) => __awaiter(void 0, void 0, void 0, function* () {
+    const items = (yield bucket.listObjects()).objects;
+    const buildStructure = (pre, cur) => __awaiter(void 0, void 0, void 0, function* () {
+        const splits = cur.key.split(`/`).slice(5);
+        let current = yield pre;
+        for (let idx = 0; idx < splits.length; idx++) {
+            const part = splits[idx];
+            const existing = current.find((item) => item.name === part);
+            if (idx === splits.length - 1) {
+                const content = bucket.getObjectPublicUrls(cur.key)[0];
+                const response = yield (yield fetch(content)).text();
+                if (!existing)
+                    current.push({ path: cur.key, name: part, type: `file`, public: content, content: response });
+            }
+            else {
+                if (!existing) {
+                    const newFolder = { path: cur.key, name: part, type: `folder`, public: ``, content: [] };
+                    current.push(newFolder);
+                    current = newFolder.content;
+                }
+                else
+                    current = existing.content;
+            }
         }
-        else
-            content = fs_1.default.readFileSync(`${path}/${name}`, `utf-8`);
-        data.push({ name, type, content });
+        return pre;
     });
-    return data;
-};
+    const filter = items.filter(e => `${e.key}`.startsWith(path));
+    return yield filter.reduce(buildStructure, Promise.resolve([]));
+});
+const getVerify = (req) => __awaiter(void 0, void 0, void 0, function* () {
+    return { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+});
+const getGrantes = (req) => __awaiter(void 0, void 0, void 0, function* () {
+    return { data: yield RepositoryGrantes.service({ params: { node_id: req.params.repo_id } }, { send: () => { }, setHeader: () => { } }) };
+});
 let OauthOTP = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/v1/user/otp`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var OauthOTP = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `로그인 실패` };
@@ -124,13 +151,14 @@ let OauthOTP = (() => {
     })();
     return OauthOTP = _classThis;
 })();
+exports.OauthOTP = OauthOTP;
 let OauthSignIn = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/v1/user/signin`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var OauthSignIn = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `인증메일 전송 실패` };
@@ -164,13 +192,14 @@ let OauthSignIn = (() => {
     })();
     return OauthSignIn = _classThis;
 })();
+exports.OauthSignIn = OauthSignIn;
 let OauthSignUp = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/v1/user/signup`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var OauthSignUp = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `회원가입 실패` };
@@ -178,7 +207,6 @@ let OauthSignUp = (() => {
                     const result = yield mysql.execute(`SELECT * FROM users WHERE user_email = ?`, [req.body.user_email]);
                     if (result && Array.isArray(result[0]) && !result[0][0]) {
                         const insert = yield mysql.execute(`INSERT INTO users (user_email, user_password) VALUES (?, ?)`, [req.body.user_email, crypto_1.default.createHash(`sha512`).update(req.body.user_password).digest(`hex`)]);
-                        fs_1.default.mkdirSync(`data/${req.body.user_email}`, { recursive: true });
                         if (insert) {
                             response.status = 200;
                             response.message = `회원가입 성공, 로그인 필요`;
@@ -199,13 +227,14 @@ let OauthSignUp = (() => {
     })();
     return OauthSignUp = _classThis;
 })();
+exports.OauthSignUp = OauthSignUp;
 let OauthVerify = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/v1/user/verify`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var OauthVerify = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 var _a;
                 res.setHeader(`Content-type`, `application/json`);
@@ -244,13 +273,14 @@ let OauthVerify = (() => {
     })();
     return OauthVerify = _classThis;
 })();
+exports.OauthVerify = OauthVerify;
 let User = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/user/:user_email`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var User = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `유저 불러오기 실패` };
@@ -275,17 +305,52 @@ let User = (() => {
     })();
     return User = _classThis;
 })();
+exports.User = User;
+let UserViewPrivate = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/view-private`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var UserViewPrivate = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `레포지토리 목록 불러오기 실패` };
+                const verify = yield getVerify(req);
+                if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
+                    const result = yield mysql.execute(`SELECT U.user_name, R.* FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.user_email = ? ORDER BY R.created_at DESC`, [req.body.user_email]);
+                    if (result && Array.isArray(result[0])) {
+                        response.status = 200;
+                        response.message = `레포지토리 목록 불러오기 성공`;
+                        response.data = result[0];
+                    }
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "UserViewPrivate");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        UserViewPrivate = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return UserViewPrivate = _classThis;
+})();
+exports.UserViewPrivate = UserViewPrivate;
 let UserDevices = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/user/devices`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var UserDevices = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `디바이스 목록 불러오기 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
                     const result = yield mysql.execute(`SELECT * FROM user_device WHERE user_email = ?`, [verify.data.data.user_email]);
                     if (result && Array.isArray(result[0])) {
@@ -308,17 +373,18 @@ let UserDevices = (() => {
     })();
     return UserDevices = _classThis;
 })();
+exports.UserDevices = UserDevices;
 let UserDeviceRemove = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/user/device/remove`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var UserDeviceRemove = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `디바이스 제거 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
                     const result = yield mysql.execute(`DELETE FROM user_device WHERE user_email = ? AND device_agent = ?`, [verify.data.data.user_email, req.body.agent]);
                     if (result) {
@@ -340,19 +406,25 @@ let UserDeviceRemove = (() => {
     })();
     return UserDeviceRemove = _classThis;
 })();
+exports.UserDeviceRemove = UserDeviceRemove;
 let UserAlerts = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/user/alerts`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var UserAlerts = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
+                var _a;
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `알림 목록 불러오기 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
-                    const result = yield mysql.execute(`SELECT * FROM user_alert WHERE user_email = ? ORDER BY created_at DESC LIMIT 5`, [verify.data.data.user_email]);
+                    let result;
+                    if ((_a = req.body) === null || _a === void 0 ? void 0 : _a.limit)
+                        result = yield mysql.execute(`SELECT * FROM user_alert WHERE user_email = ? ORDER BY created_at DESC LIMIT 5`, [verify.data.data.user_email]);
+                    else
+                        result = yield mysql.execute(`SELECT * FROM user_alert WHERE user_email = ? ORDER BY created_at DESC`, [verify.data.data.user_email]);
                     if (result && Array.isArray(result[0])) {
                         response.status = 200;
                         response.message = `알림 목록 불러오기 성공`;
@@ -373,17 +445,18 @@ let UserAlerts = (() => {
     })();
     return UserAlerts = _classThis;
 })();
+exports.UserAlerts = UserAlerts;
 let UserAlert = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/user/alert`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var UserAlert = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `알림 읽기 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
                     req.body.ids.forEach((id) => __awaiter(this, void 0, void 0, function* () { return yield mysql.execute(`UPDATE user_alert SET alert_read = 1 WHERE node_id = ? AND user_email = ?`, [id, verify.data.data.user_email]); }));
                     response.status = 200;
@@ -403,23 +476,22 @@ let UserAlert = (() => {
     })();
     return UserAlert = _classThis;
 })();
+exports.UserAlert = UserAlert;
 let UserModifyAvatar = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/user/modify/avatar`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var UserModifyAvatar = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `아바타 수정 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email && req.file) {
                     let update;
-                    let path = ``;
-                    path = `/uploads/${req.file.filename}`;
-                    if (path !== ``)
-                        update = yield mysql.execute(`UPDATE users SET avatar_src = ? WHERE user_email = ?`, [path, req.body.user_email]);
+                    if (name)
+                        update = yield mysql.execute(`UPDATE users SET avatar_src = ? WHERE user_email = ?`, [`${process.env.PUBLIC_URL}/${name.key}`, req.body.user_email]);
                     if (update) {
                         response.status = 200;
                         response.message = `아바타 수정 성공`;
@@ -439,17 +511,18 @@ let UserModifyAvatar = (() => {
     })();
     return UserModifyAvatar = _classThis;
 })();
+exports.UserModifyAvatar = UserModifyAvatar;
 let UserModifyName = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/user/modify/name`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var UserModifyName = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `이름 수정 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
                     const update = yield mysql.execute(`UPDATE users SET user_name = ? WHERE user_email = ?`, [req.body.user_name, req.body.user_email]);
                     if (update) {
@@ -471,17 +544,51 @@ let UserModifyName = (() => {
     })();
     return UserModifyName = _classThis;
 })();
+exports.UserModifyName = UserModifyName;
+let UserModifyBio = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/user/modify/bio`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var UserModifyBio = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `설명 수정 실패` };
+                const verify = yield getVerify(req);
+                if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
+                    const update = yield mysql.execute(`UPDATE users SET user_bio = ? WHERE user_email = ?`, [req.body.user_bio, req.body.user_email]);
+                    if (update) {
+                        response.status = 200;
+                        response.message = `설명 수정 성공`;
+                    }
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "UserModifyBio");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        UserModifyBio = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return UserModifyBio = _classThis;
+})();
+exports.UserModifyBio = UserModifyBio;
 let UserModifyPassword = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/user/modify/password`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var UserModifyPassword = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `비밀번호 수정 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200 && verify.data.data.user_email === req.body.user_email) {
                     const update = yield mysql.execute(`UPDATE users SET user_password = ? WHERE user_email = ?`, [crypto_1.default.createHash(`sha512`).update(req.body.user_password).digest(`hex`), req.body.user_email]);
                     if (update) {
@@ -503,43 +610,113 @@ let UserModifyPassword = (() => {
     })();
     return UserModifyPassword = _classThis;
 })();
-let UserAvatar = (() => {
-    let _classDecorators = [Control.Service(`get`, `/api/:user_email/avatar`)];
+exports.UserModifyPassword = UserModifyPassword;
+let UserFollow = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/user/follow`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
-    var UserAvatar = _classThis = class {
-        static service(req, res) {
+    var UserFollow = _classThis = class {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
-                const result = yield mysql.execute(`SELECT avatar_src FROM users WHERE user_email = ?`, [req.params.user_email]);
-                if (result && Array.isArray(result[0]) && result[0][0]) {
-                    const url = path_1.default.join(`${__dirname}/../data/${result[0][0].avatar_src}`);
-                    if (fs_1.default.existsSync(url)) {
-                        const file = fs_1.default.readFileSync(url);
-                        res.setHeader(`Content-type`, `image/png`);
-                        res.send(file);
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `팔로우 실패` };
+                const verify = yield getVerify(req);
+                if (verify.data.status === 200 && verify.data.data.user_email !== req.body.user_email) {
+                    const result = yield mysql.execute(`SELECT * FROM user_follow WHERE user_email = ? AND target_email = ?`, [verify.data.data.user_email, req.body.user_email]);
+                    if (result && Array.isArray(result[0]) && result[0][0])
+                        yield mysql.execute(`DELETE FROM user_follow WHERE user_email = ? AND target_email = ?`, [verify.data.data.user_email, req.body.user_email]);
+                    else {
+                        yield mysql.execute(`INSERT INTO user_follow (user_email, target_email) VALUES (?, ?)`, [verify.data.data.user_email, req.body.user_email]);
+                        yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, CONCAT("/", U.user_email), CONCAT("새 팔로워: @", IFNULL(U.user_name, U.user_email)), CONCAT(IFNULL(U.user_name, U.user_email), "님이 당신을 팔로우하기 시작했습니다.") FROM users AS U WHERE U.user_email = ?`, [req.body.user_email, verify.data.data.user_email]);
                     }
+                    response.status = 200;
+                    response.message = `팔로우 성공`;
                 }
+                res.send(JSON.stringify(response));
             });
         }
     };
-    __setFunctionName(_classThis, "UserAvatar");
+    __setFunctionName(_classThis, "UserFollow");
     (() => {
         const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
         __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
-        UserAvatar = _classThis = _classDescriptor.value;
+        UserFollow = _classThis = _classDescriptor.value;
         if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
         __runInitializers(_classThis, _classExtraInitializers);
     })();
-    return UserAvatar = _classThis;
+    return UserFollow = _classThis;
 })();
+exports.UserFollow = UserFollow;
+let UserFollowing = (() => {
+    let _classDecorators = [Control.Service(`get`, `/api/:user_email/following`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var UserFollowing = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `팔로잉 목록 불러오기 실패` };
+                const result = yield mysql.execute(`SELECT U.user_email, U.user_name, U.avatar_src, U.user_bio, UF.created_at FROM user_follow AS UF JOIN users AS U ON UF.target_email = U.user_email WHERE UF.user_email = ?`, [req.params.user_email]);
+                if (result && Array.isArray(result[0]) && result[0][0]) {
+                    response.status = 200;
+                    response.message = `팔로잉 목록 불러오기 성공`;
+                    response.data = result[0];
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "UserFollowing");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        UserFollowing = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return UserFollowing = _classThis;
+})();
+exports.UserFollowing = UserFollowing;
+let UserFollower = (() => {
+    let _classDecorators = [Control.Service(`get`, `/api/:user_email/follower`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var UserFollower = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `팔로워 목록 불러오기 실패` };
+                const result = yield mysql.execute(`SELECT U.user_email, U.user_name, U.avatar_src, U.user_bio, UF.created_at FROM user_follow AS UF JOIN users AS U ON UF.user_email = U.user_email WHERE UF.target_email = ?`, [req.params.user_email]);
+                if (result && Array.isArray(result[0]) && result[0][0]) {
+                    response.status = 200;
+                    response.message = `팔로워 목록 불러오기 성공`;
+                    response.data = result[0];
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "UserFollower");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        UserFollower = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return UserFollower = _classThis;
+})();
+exports.UserFollower = UserFollower;
 let Repositories = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/:user_email/repositories`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var Repositories = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `레포지토리 목록 불러오기 실패` };
@@ -563,13 +740,14 @@ let Repositories = (() => {
     })();
     return Repositories = _classThis;
 })();
+exports.Repositories = Repositories;
 let Repository = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:node_id`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var Repository = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `레포지토리 불러오기 실패` };
@@ -595,13 +773,14 @@ let Repository = (() => {
     })();
     return Repository = _classThis;
 })();
+exports.Repository = Repository;
 let RepositoryGrantes = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:node_id/grantes`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryGrantes = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `권한 목록 불러오기 실패` };
@@ -626,43 +805,14 @@ let RepositoryGrantes = (() => {
     })();
     return RepositoryGrantes = _classThis;
 })();
-let RepositoryTopicImage = (() => {
-    let _classDecorators = [Control.Service(`get`, `/api/repository/:node_id/topic_image`)];
-    let _classDescriptor;
-    let _classExtraInitializers = [];
-    let _classThis;
-    var RepositoryTopicImage = _classThis = class {
-        static service(req, res) {
-            return __awaiter(this, void 0, void 0, function* () {
-                const result = yield mysql.execute(`SELECT image_src FROM repositories WHERE node_id = ?`, [req.params.node_id]);
-                if (result && Array.isArray(result[0]) && result[0][0]) {
-                    const url = path_1.default.join(`${__dirname}/../data/${result[0][0].image_src}`);
-                    if (fs_1.default.existsSync(url)) {
-                        const file = fs_1.default.readFileSync(url);
-                        res.setHeader(`Content-type`, `image/png`);
-                        res.send(file);
-                    }
-                }
-            });
-        }
-    };
-    __setFunctionName(_classThis, "RepositoryTopicImage");
-    (() => {
-        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
-        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
-        RepositoryTopicImage = _classThis = _classDescriptor.value;
-        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
-        __runInitializers(_classThis, _classExtraInitializers);
-    })();
-    return RepositoryTopicImage = _classThis;
-})();
+exports.RepositoryGrantes = RepositoryGrantes;
 let RepositoryBranches = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:node_id/branches`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryBranches = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `브랜치 목록 불러오기 실패` };
@@ -686,13 +836,14 @@ let RepositoryBranches = (() => {
     })();
     return RepositoryBranches = _classThis;
 })();
+exports.RepositoryBranches = RepositoryBranches;
 let RepositoryBranch = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/branch/:node_id`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryBranch = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `브랜치 불러오기 실패` };
@@ -716,13 +867,14 @@ let RepositoryBranch = (() => {
     })();
     return RepositoryBranch = _classThis;
 })();
+exports.RepositoryBranch = RepositoryBranch;
 let RepositoryBranchDirectory = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/branch/:node_id/directory`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryBranchDirectory = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `디렉터리 불러오기 실패` };
@@ -735,7 +887,7 @@ let RepositoryBranchDirectory = (() => {
                     const lastCommit = yield mysql.execute(`SELECT RBC.* FROM repository_branch_commit AS RBC JOIN repository_branch AS RB JOIN repositories AS R JOIN users AS U ON RBC.branch_id = RB.node_id AND RB.repo_id = R.node_id AND R.user_email = U.user_email WHERE RB.node_id = ? ORDER BY RB.created_at DESC LIMIT 1`, [data.node_id]);
                     if (lastCommit && Array.isArray(lastCommit[0]) && lastCommit[0][0]) {
                         const commit = lastCommit[0][0];
-                        response.data = recursion(`${commit.commit_src}`);
+                        response.data = yield recursion(`${commit.commit_src}`);
                         response.data.sort((a, b) => {
                             if (a.type === `folder` && b.type !== `folder`)
                                 return -1;
@@ -760,13 +912,14 @@ let RepositoryBranchDirectory = (() => {
     })();
     return RepositoryBranchDirectory = _classThis;
 })();
+exports.RepositoryBranchDirectory = RepositoryBranchDirectory;
 let RepositoryBranchCommits = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/branch/:node_id/commits`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryBranchCommits = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `커밋 목록 불러오기 실패` };
@@ -790,13 +943,14 @@ let RepositoryBranchCommits = (() => {
     })();
     return RepositoryBranchCommits = _classThis;
 })();
+exports.RepositoryBranchCommits = RepositoryBranchCommits;
 let RepositoryBranchCommit = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/branch/:branch_id/commit/:node_id`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryBranchCommit = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `커밋 불러오기 실패` };
@@ -820,13 +974,14 @@ let RepositoryBranchCommit = (() => {
     })();
     return RepositoryBranchCommit = _classThis;
 })();
+exports.RepositoryBranchCommit = RepositoryBranchCommit;
 let RepositoryBranchCommitDirectory = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/branch/:branch_id/commit/:node_id/directory`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryBranchCommitDirectory = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `디렉터리 불러오기 실패` };
@@ -835,7 +990,8 @@ let RepositoryBranchCommitDirectory = (() => {
                     const commit = result[0][0];
                     response.status = 200;
                     response.message = `디렉터리 불러오기 성공`;
-                    response.data = recursion(`${commit.commit_src}`);
+                    response.data = yield recursion(`${commit.commit_src}`);
+                    console.log(commit.commit_src);
                     response.data.sort((a, b) => {
                         if (a.type === `folder` && b.type !== `folder`)
                             return -1;
@@ -859,13 +1015,14 @@ let RepositoryBranchCommitDirectory = (() => {
     })();
     return RepositoryBranchCommitDirectory = _classThis;
 })();
+exports.RepositoryBranchCommitDirectory = RepositoryBranchCommitDirectory;
 let RepositoryBranchPrevCommitDirectory = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/branch/:branch_id/commit/:node_id/directory/prev`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryBranchPrevCommitDirectory = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `디렉터리 불러오기 실패` };
@@ -874,7 +1031,7 @@ let RepositoryBranchPrevCommitDirectory = (() => {
                     const commit = result[0][0];
                     response.status = 200;
                     response.message = `디렉터리 불러오기 성공`;
-                    response.data = recursion(`${commit.commit_src}`);
+                    response.data = yield recursion(`${commit.commit_src}`);
                     response.data.sort((a, b) => {
                         if (a.type === `folder` && b.type !== `folder`)
                             return -1;
@@ -898,13 +1055,14 @@ let RepositoryBranchPrevCommitDirectory = (() => {
     })();
     return RepositoryBranchPrevCommitDirectory = _classThis;
 })();
+exports.RepositoryBranchPrevCommitDirectory = RepositoryBranchPrevCommitDirectory;
 let RepositoryIssues = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:node_id/issues`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryIssues = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `이슈 목록 불러오기 실패` };
@@ -928,13 +1086,14 @@ let RepositoryIssues = (() => {
     })();
     return RepositoryIssues = _classThis;
 })();
+exports.RepositoryIssues = RepositoryIssues;
 let RepositoryIssue = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/issue/:node_id`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryIssue = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `이슈 불러오기 실패` };
@@ -958,13 +1117,14 @@ let RepositoryIssue = (() => {
     })();
     return RepositoryIssue = _classThis;
 })();
+exports.RepositoryIssue = RepositoryIssue;
 let RepositoryIssueComments = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/issue/:node_id/comments`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryIssueComments = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `이슈 댓글 목록 불러오기 실패` };
@@ -995,17 +1155,18 @@ let RepositoryIssueComments = (() => {
     })();
     return RepositoryIssueComments = _classThis;
 })();
+exports.RepositoryIssueComments = RepositoryIssueComments;
 let RepositoryIssueCreate = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/repository/:node_id/issue/create`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryIssueCreate = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `이슈 작성 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
                     const insert = yield mysql.execute(`INSERT INTO repository_issue (repo_id, user_email, issue_title, issue_content, issue_status) VALUES (?, ?, ?, ?, ?)`, [req.params.node_id, verify.data.data.user_email, req.body.issue_title, req.body.issue_content, `대기`]);
                     yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, CONCAT(?, "/", RI.node_id), CONCAT("새 이슈: @", IFNULL(U.user_name, R.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U JOIN repository_issue AS RI ON R.user_email = U.user_email AND R.node_id = RI.repo_id WHERE R.node_id = ? ORDER BY RI.created_at DESC LIMIT 1`, [0, `/repositories/${req.params.node_id}/issues`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 레포지토리에 이슈를 생성했습니다.`, req.params.node_id]);
@@ -1028,17 +1189,18 @@ let RepositoryIssueCreate = (() => {
     })();
     return RepositoryIssueCreate = _classThis;
 })();
+exports.RepositoryIssueCreate = RepositoryIssueCreate;
 let RepositoryIssueCommentCreate = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/repository/:repo_id/issue/:node_id/comment/create`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryIssueCommentCreate = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `이슈 댓글 작성 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
                     const insert = yield mysql.execute(`INSERT INTO repository_issue_comment (issue_id, user_email, comment_content, comment_type, comment_target_id) VALUES (?, ?, ?, ?, ?)`, [req.params.node_id, verify.data.data.user_email, req.body.comment_content, req.body.reply ? `reply` : `default`, req.body.reply || null]);
                     yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT RI.user_email, 0, CONCAT("/repositories/", R.node_id, "/issues/", RI.node_id), CONCAT("새 댓글: @", IFNULL(R_U.user_name, R_U.user_email), "/", R.repo_name, " [", RI.issue_title, "]"), CONCAT(?, "님이 당신의 이슈에 댓글을 달았습니다.") FROM repositories AS R JOIN repository_issue AS RI JOIN repository_issue_comment AS RIC JOIN users AS RI_U JOIN users AS R_U ON R.node_id = RI.repo_id AND RI.node_id = RIC.issue_id AND R_U.user_email = R.user_email AND RI_U.user_email = RI.user_email WHERE RI.node_id = ? ORDER BY RIC.created_at DESC LIMIT 1`, [verify.data.data.user_name || verify.data.data.user_email, req.params.node_id]);
@@ -1061,19 +1223,20 @@ let RepositoryIssueCommentCreate = (() => {
     })();
     return RepositoryIssueCommentCreate = _classThis;
 })();
+exports.RepositoryIssueCommentCreate = RepositoryIssueCommentCreate;
 let RepositoryIssueStatus = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/repository/:repo_id/issue/:node_id/status`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryIssueStatus = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `상태 변경 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
-                    const grantes = { data: yield RepositoryGrantes.service({ params: { node_id: req.params.repo_id } }, { send: () => { }, setHeader: () => { } }) };
+                    const grantes = getGrantes(req);
                     if (grantes.data.data.find((e) => e.target_email === verify.data.data.user_email)) {
                         yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT RI.user_email, 0, ?, CONCAT("상태 변경: @", IFNULL(R_U.user_name, R_U.user_email), "/", R.repo_name, " [", RI.issue_title, "]"), CONCAT("이슈 상태가 \`", RI.issue_status, "\` 에서 \`", ?, "\` (으)로 변경되었습니다.") FROM repositories AS R JOIN users AS R_U JOIN repository_issue AS RI ON R.user_email = R_U.user_email AND RI.repo_id = R.node_id WHERE RI.node_id = ?`, [`/repositories/${req.params.repo_id}/issues/${req.params.node_id}`, req.body.status, req.params.node_id]);
                         const update = yield mysql.execute(`UPDATE repository_issue SET issue_status = ? WHERE node_id = ?`, [req.body.status, req.params.node_id]);
@@ -1097,18 +1260,18 @@ let RepositoryIssueStatus = (() => {
     })();
     return RepositoryIssueStatus = _classThis;
 })();
+exports.RepositoryIssueStatus = RepositoryIssueStatus;
 let RepositoryCreate = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/repository/create`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryCreate = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
-                var _a;
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `레포지토리 생성 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
                     const result = yield mysql.execute(`SELECT node_id FROM repositories ORDER BY created_at DESC LIMIT 1`);
                     const data = { node_id: 0 };
@@ -1121,23 +1284,20 @@ let RepositoryCreate = (() => {
                         yield mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, `admin`, verify.data.data.user_email]);
                     grantes.forEach((e) => __awaiter(this, void 0, void 0, function* () {
                         yield mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, e.type, e.user_email]);
-                        yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]);
+                        yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("새 권한: @", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]);
                     }));
                     const branch_src = `data/${req.body.user_email}/${data.node_id + 1}/main`;
-                    fs_1.default.mkdirSync(branch_src, { recursive: true });
                     const lastId = yield mysql.execute(`SELECT node_id FROM repository_branch_commit ORDER BY created_at DESC LIMIT 1`);
                     let id = 1;
                     if (lastId && Array.isArray(lastId[0]) && lastId[0][0])
                         id = lastId[0][0].node_id + 1;
-                    fs_1.default.mkdirSync(`${branch_src}/${id}`, { recursive: true });
-                    fs_1.default.writeFileSync(`${branch_src}/${id}/readme.md`, `## ${req.body.repo_name}`);
-                    yield mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src.substring(5)]);
-                    yield mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [id, `${branch_src}/${id}`, `main branch initial`]);
-                    fs_1.default.mkdirSync(`data/${req.body.user_email}/${data.node_id + 1}`, { recursive: true });
+                    yield bucket.upload(`## ${req.body.repo_name}`, `${branch_src}/${id}/readme.md`);
+                    const branch = yield mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src]);
+                    yield mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [branch[0].insertId, `${branch_src}/${id}`, `main branch initial`]);
                     let path = ``;
-                    if (req.file)
-                        path = `/uploads/${(_a = req.file) === null || _a === void 0 ? void 0 : _a.filename}`;
-                    const insert = yield mysql.execute(`INSERT INTO repositories (user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path]);
+                    if (name)
+                        path = `${process.env.PUBLIC_URL}/${name.key}`;
+                    const insert = yield mysql.execute(`INSERT INTO repositories (node_id, user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [data.node_id + 1, req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path]);
                     grantes.forEach((e) => __awaiter(this, void 0, void 0, function* () { return yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]); }));
                     if (insert) {
                         response.status = 200;
@@ -1158,27 +1318,27 @@ let RepositoryCreate = (() => {
     })();
     return RepositoryCreate = _classThis;
 })();
+exports.RepositoryCreate = RepositoryCreate;
 let RepositoryModify = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/repository/modify`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryModify = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
-                var _a;
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `레포지토리 수정 실패` };
                 const result = yield mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.body.node_id]);
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (result && Array.isArray(result[0]) && result[0][0]) {
                     const data = result[0][0];
                     const grantes = { data: yield RepositoryGrantes.service({ params: { node_id: req.body.node_id } }, { send: () => { }, setHeader: () => { } }) };
                     if (grantes.data.data.find((e) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
                         let update;
                         let path = ``;
-                        if (req.file)
-                            path = `/uploads/${(_a = req.file) === null || _a === void 0 ? void 0 : _a.filename}`;
+                        if (name)
+                            path = `${process.env.PUBLIC_URL}/${name.key}`;
                         const { repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, node_id } = req.body;
                         if (path === ``)
                             update = yield mysql.execute(`UPDATE repositories SET repo_name = ?, repo_description = ?, repo_category = ?, repo_subcategory = ?, repo_visibility = ?, repo_archive = ?, repo_license = ? WHERE node_id = ?`, [repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, node_id]);
@@ -1209,13 +1369,72 @@ let RepositoryModify = (() => {
     })();
     return RepositoryModify = _classThis;
 })();
+exports.RepositoryModify = RepositoryModify;
+let RepositoryFork = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/repository/fork`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var RepositoryFork = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `레포지토리 포크 실패` };
+                const verify = yield getVerify(req);
+                if (verify.data.status === 200) {
+                    const result = yield mysql.execute(`SELECT node_id FROM repositories ORDER BY created_at DESC LIMIT 1`);
+                    const data = { node_id: 0 };
+                    if (result && Array.isArray(result[0]) && result[0][0]) {
+                        const res = result[0][0];
+                        data.node_id = res.node_id;
+                    }
+                    const grantes = JSON.parse(req.body.repo_grantes);
+                    if (!grantes.reduce((pre, cur) => [...pre, cur.user_email], []).includes(verify.data.data.user_email))
+                        yield mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, `admin`, verify.data.data.user_email]);
+                    grantes.forEach((e) => __awaiter(this, void 0, void 0, function* () {
+                        yield mysql.execute(`INSERT INTO repository_authorities (repo_id, authority_type, target_email) VALUES (?, ?, ?)`, [data.node_id + 1, e.type, e.user_email]);
+                        yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("새 권한: @", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]);
+                    }));
+                    const branch_src = `data/${req.body.user_email}/${data.node_id + 1}/main`;
+                    const lastId = yield mysql.execute(`SELECT node_id FROM repository_branch_commit ORDER BY created_at DESC LIMIT 1`);
+                    let id = 1;
+                    if (lastId && Array.isArray(lastId[0]) && lastId[0][0])
+                        id = lastId[0][0].node_id + 1;
+                    yield bucket.upload(`## ${req.body.repo_name}`, `${branch_src}/${id}/readme.md`);
+                    const branch = yield mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [data.node_id + 1, `main`, branch_src]);
+                    yield mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [branch[0].insertId, `${branch_src}/${id}`, `main branch initial`]);
+                    let path = ``;
+                    if (name)
+                        path = `${process.env.PUBLIC_URL}/${name.key}`;
+                    const insert = yield mysql.execute(`INSERT INTO repositories (node_id, repo_type, user_email, repo_name, repo_description, repo_category, repo_subcategory, repo_visibility, repo_archive, repo_license, image_src) VALUES (?, "forked", ?, ?, ?, ?, ?, ?, ?, ?, ?)`, [data.node_id + 1, req.body.user_email, req.body.repo_name, req.body.repo_description, req.body.repo_category, req.body.repo_subcategory, req.body.repo_visibility, req.body.repo_archive, req.body.repo_license, path]);
+                    grantes.forEach((e) => __awaiter(this, void 0, void 0, function* () { return yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT ?, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), "레포지토리에 대한 권한이 부여되었습니다." FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [e.user_email, `/repositories/${data.node_id + 1}`, data.node_id + 1]); }));
+                    if (insert) {
+                        response.status = 200;
+                        response.message = `레포지토리 포크 성공`;
+                    }
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "RepositoryFork");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        RepositoryFork = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return RepositoryFork = _classThis;
+})();
+exports.RepositoryFork = RepositoryFork;
 let RepositoryBranchPush = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/repository/:node_id/push`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryBranchPush = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `커밋 일괄처리 실패` };
@@ -1229,7 +1448,6 @@ let RepositoryBranchPush = (() => {
                         if (result && Array.isArray(result[0])) {
                             if (result[0].length === 0) {
                                 const branch_src = `data/${verify.data.data.user_email}/${req.params.node_id}/${req.body.branch}`;
-                                fs_1.default.mkdirSync(branch_src, { recursive: true });
                                 yield mysql.execute(`INSERT INTO repository_branch (repo_id, branch_name, branch_src) VALUES (?, ?, ?)`, [req.params.node_id, req.body.branch, branch_src.substring(5)]);
                             }
                             const reResult = yield mysql.execute(`SELECT * FROM repository_branch WHERE repo_id = ? AND branch_name = ?`, [req.params.node_id, req.body.branch]);
@@ -1244,27 +1462,38 @@ let RepositoryBranchPush = (() => {
                                     if (lastId && Array.isArray(lastId[0]) && lastId[0][0])
                                         id = lastId[0][0].node_id + 1;
                                 }
-                                const path = `data/${data.branch_src}/${id}`;
-                                if (id - 1 > 0 && fs_1.default.existsSync(`data/${data.branch_src}/${id - 1}`))
-                                    fs_1.default.cpSync(`data/${data.branch_src}/${id - 1}`, path, { recursive: true });
-                                else
-                                    fs_1.default.mkdirSync(path, { recursive: true });
-                                req.body.commits.forEach((e) => {
-                                    const paths = e.name.split(`/`);
-                                    if (paths.length > 1) {
-                                        paths.forEach((e_, idx) => {
-                                            if (idx + 1 !== paths.length)
-                                                fs_1.default.mkdirSync(`${path}/${e_}`, { recursive: true });
-                                        });
+                                const recursionSecond = (path) => __awaiter(this, void 0, void 0, function* () {
+                                    const recursionResult = yield recursion(path);
+                                    if (id - 1 > 0 && recursionResult.length > 0) {
+                                        for (let i = 0; i < recursionResult.length; i++) {
+                                            if (recursionResult[i].type === `file`) {
+                                                const response = yield (yield fetch(recursionResult[i].public)).text();
+                                                yield bucket.uploadStream(response, `data/${data.branch_src}/${id}/${recursionResult[i].name}`);
+                                            }
+                                            else {
+                                                console.log(`data/${data.branch_src}/${id}/${recursionResult[i].name}`);
+                                                yield recursionSecond(`data/${data.branch_src}/${id}/${recursionResult[i].name}`);
+                                            }
+                                        }
                                     }
-                                    if (fs_1.default.existsSync(`${path}/${e.name}`))
-                                        fs_1.default.unlinkSync(`${path}/${e.name}`);
-                                    if (e.file)
-                                        fs_1.default.writeFileSync(`${path}/${e.name}`, e.file);
-                                    else
-                                        fs_1.default.writeFileSync(`${path}/${e.name}`, ``);
                                 });
-                                const insert = yield mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [data.node_id, `${path}`, req.body.commits[req.body.commits.length - 1].message]);
+                                const path = `data/${data.branch_src}/${id - 1}`;
+                                yield recursionSecond(path);
+                                req.body.commits.forEach((e) => __awaiter(this, void 0, void 0, function* () {
+                                    if (e.type === `add`) {
+                                        if (yield bucket.objectExists(`${path}/${e.name}`))
+                                            yield bucket.deleteObject(`${path}/${e.name}`);
+                                        if (e.file)
+                                            yield bucket.upload(e.file, `${path}/${e.name}`);
+                                        else
+                                            yield bucket.upload(``, `${path}/${e.name}`);
+                                    }
+                                    else if (e.type === `remove`) {
+                                        if (yield bucket.objectExists(`${path}/${e.name}`))
+                                            yield bucket.deleteObject(`${path}/${e.name}`);
+                                    }
+                                }));
+                                const insert = yield mysql.execute(`INSERT INTO repository_branch_commit (branch_id, commit_src, commit_message) VALUES (?, ?, ?)`, [data.node_id, `${path}`, req.body.message || `메시지 없음`]);
                                 yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT RA.target_email, 0, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), CONCAT("\`", ?, "\` 브랜치에 커밋 일괄처리가 되었습니다.") FROM repositories AS R JOIN users U JOIN repository_authorities AS RA ON R.user_email = U.user_email AND RA.repo_id = R.node_id WHERE R.node_id = ?`, [`/repositories/${req.params.node_id}`, req.body.branch, req.params.node_id]);
                                 if (insert) {
                                     response.status = 200;
@@ -1288,13 +1517,259 @@ let RepositoryBranchPush = (() => {
     })();
     return RepositoryBranchPush = _classThis;
 })();
+exports.RepositoryBranchPush = RepositoryBranchPush;
+let RepositoryPullRequests = (() => {
+    let _classDecorators = [Control.Service(`get`, `/api/repository/:node_id/pullrequests`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var RepositoryPullRequests = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `풀리퀘스트 목록 불러오기 실패` };
+                const result = yield mysql.execute(`SELECT * FROM repository_pullrequest WHERE target_repo_id = ? ORDER BY created_at DESC`, [req.params.node_id]);
+                if (result && Array.isArray(result[0])) {
+                    response.status = 200;
+                    response.message = `풀리퀘스트 목록 불러오기 성공`;
+                    response.data = result[0];
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "RepositoryPullRequests");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        RepositoryPullRequests = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return RepositoryPullRequests = _classThis;
+})();
+exports.RepositoryPullRequests = RepositoryPullRequests;
+let RepositoryPullRequest = (() => {
+    let _classDecorators = [Control.Service(`get`, `/api/repository/:repo_id/pullrequest/:node_id`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var RepositoryPullRequest = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `풀리퀘스트 불러오기 실패` };
+                const result = yield mysql.execute(`SELECT * FROM repository_pullrequest WHERE node_id = ? ORDER BY created_at DESC`, [req.params.node_id]);
+                if (result && Array.isArray(result[0]) && result[0][0]) {
+                    response.status = 200;
+                    response.message = `풀리퀘스트 불러오기 성공`;
+                    response.data = result[0][0];
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "RepositoryPullRequest");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        RepositoryPullRequest = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return RepositoryPullRequest = _classThis;
+})();
+exports.RepositoryPullRequest = RepositoryPullRequest;
+let RepositoryPullRequestCreate = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/repository/:node_id/pullrequest/create`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var RepositoryPullRequestCreate = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `풀리퀘스트 전송 실패` };
+                const result = yield mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.node_id]);
+                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                if (result && Array.isArray(result[0]) && result[0][0] && verify.data.status === 200) {
+                    yield mysql.execute(`INSERT INTO repository_pullrequest (repo_id, target_repo_id, user_email, pr_type, branch_name, target_branch_name, commit_id, pr_title, pr_content) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`, [req.body.repo_id, req.body.target_repo_id, verify.data.data.user_email, `대기`, req.body.branch_name, req.body.target_branch_name, req.body.commit_id, req.body.pr_title, req.body.pr_content]);
+                    response.status = 200;
+                    response.message = `풀리퀘스트 전송 성공`;
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "RepositoryPullRequestCreate");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        RepositoryPullRequestCreate = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return RepositoryPullRequestCreate = _classThis;
+})();
+exports.RepositoryPullRequestCreate = RepositoryPullRequestCreate;
+let RepositoryBranchRemove = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/repository/:repo_id/branch/:node_id/remove`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var RepositoryBranchRemove = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `브랜치 삭제 실패` };
+                const result = yield mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.repo_id]);
+                const branch = yield mysql.execute(`SELECT * FROM repository_branch WHERE node_id = ?`, [req.params.node_id]);
+                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                if (result && Array.isArray(result[0]) && result[0][0] && branch && Array.isArray(branch[0]) && branch[0][0]) {
+                    const data = result[0][0];
+                    const grantes = getGrantes(req);
+                    if (grantes.data.data.find((e) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
+                        yield mysql.execute(`DELETE FROM repository_branch WHERE node_id = ?`, [req.params.node_id]);
+                        yield mysql.execute(`DELETE FROM repository_branch_commit WHERE branch_id = ?`, [req.params.node_id]);
+                        yield bucket.deleteObject(`/data/${data.user_email}/${req.params.repo_id}/${branch[0][0].branch_name}`);
+                        response.status = 200;
+                        response.message = `브랜치 삭제 성공`;
+                    }
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "RepositoryBranchRemove");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        RepositoryBranchRemove = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return RepositoryBranchRemove = _classThis;
+})();
+exports.RepositoryBranchRemove = RepositoryBranchRemove;
+let RepositoryRemove = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/repository/:node_id/remove`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var RepositoryRemove = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `레포지토리 삭제 실패` };
+                const result = yield mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.node_id]);
+                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                if (result && Array.isArray(result[0]) && result[0][0]) {
+                    const data = result[0][0];
+                    const grantes = { data: yield RepositoryGrantes.service({ params: { node_id: req.params.node_id } }, { send: () => { }, setHeader: () => { } }) };
+                    if (grantes.data.data.find((e) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
+                        yield mysql.execute(`DELETE FROM repositories WHERE node_id = ?`, [req.params.node_id]);
+                        yield mysql.execute(`DELETE FROM repository_branch WHERE repo_id = ?`, [req.params.node_id]);
+                        yield mysql.execute(`DELETE FROM repository_authorities WHERE repo_id = ?`, [req.params.node_id]);
+                        yield bucket.deleteObject(`/data/${data.user_email}/${req.params.node_id}`);
+                        response.status = 200;
+                        response.message = `레포지토리 삭제 성공`;
+                    }
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "RepositoryRemove");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        RepositoryRemove = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return RepositoryRemove = _classThis;
+})();
+exports.RepositoryRemove = RepositoryRemove;
+let RepositoryIssueRemove = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/repository/:repo_id/issue/:node_id/remove`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var RepositoryIssueRemove = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `이슈 삭제 실패` };
+                const result = yield mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.repo_id]);
+                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                if (result && Array.isArray(result[0]) && result[0][0]) {
+                    const data = result[0][0];
+                    const grantes = getGrantes(req);
+                    if (grantes.data.data.find((e) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
+                        yield mysql.execute(`DELETE FROM repository_issue WHERE node_id = ?`, [req.params.node_id]);
+                        response.status = 200;
+                        response.message = `이슈 삭제 성공`;
+                    }
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "RepositoryIssueRemove");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        RepositoryIssueRemove = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return RepositoryIssueRemove = _classThis;
+})();
+exports.RepositoryIssueRemove = RepositoryIssueRemove;
+let RepositoryIssueCommentRemove = (() => {
+    let _classDecorators = [Control.Service(`post`, `/api/repository/:repo_id/issue/:issue_id/comments/:node_id/remove`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var RepositoryIssueCommentRemove = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `댓글 삭제 실패` };
+                const result = yield mysql.execute(`SELECT * FROM repositories WHERE node_id = ?`, [req.params.repo_id]);
+                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken, agent: true }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                if (result && Array.isArray(result[0]) && result[0][0]) {
+                    const data = result[0][0];
+                    const grantes = getGrantes(req);
+                    if (grantes.data.data.find((e) => e.target_email === verify.data.data.user_email && e.authority_type === `admin`)) {
+                        yield mysql.execute(`DELETE FROM repository_issue_comment WHERE node_id = ?`, [req.params.node_id]);
+                        yield mysql.execute(`DELETE FROM repository_issue_comment_heart WHERE comment_id = ?`, [req.params.node_id]);
+                        response.status = 200;
+                        response.message = `댓글 삭제 성공`;
+                    }
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "RepositoryIssueCommentRemove");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        RepositoryIssueCommentRemove = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return RepositoryIssueCommentRemove = _classThis;
+})();
+exports.RepositoryIssueCommentRemove = RepositoryIssueCommentRemove;
 let RepositoryStars = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/repository/:node_id/stars`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryStars = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `스타 목록 불러오기 실패` };
@@ -1318,17 +1793,18 @@ let RepositoryStars = (() => {
     })();
     return RepositoryStars = _classThis;
 })();
+exports.RepositoryStars = RepositoryStars;
 let RepositoryStar = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/repository/:node_id/star`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryStar = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `스타 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
                     const result = yield mysql.execute(`SELECT * FROM repository_star WHERE repo_id = ? AND user_email = ?`, [req.params.node_id, verify.data.data.user_email]);
                     if (result && Array.isArray(result[0])) {
@@ -1336,7 +1812,7 @@ let RepositoryStar = (() => {
                             yield mysql.execute(`DELETE FROM repository_star WHERE repo_id = ? AND user_email = ?`, [req.params.node_id, verify.data.data.user_email]);
                         else {
                             yield mysql.execute(`INSERT INTO repository_star (repo_id, user_email) VALUES (?, ?)`, [req.params.node_id, verify.data.data.user_email]);
-                            yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, ?, CONCAT("@", IFNULL(U.user_name, U.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [0, `/repositories/${req.params.node_id}`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 레포지토리에 스타를 남겼습니다.`, req.params.node_id]);
+                            yield mysql.execute(`INSERT INTO user_alert (user_email, alert_read, alert_link, alert_title, alert_content) SELECT U.user_email, ?, ?, CONCAT("새 스타: @", IFNULL(U.user_name, U.user_email), "/", R.repo_name), ? AS user_email FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE R.node_id = ?`, [0, `/repositories/${req.params.node_id}`, `${verify.data.data.user_name || verify.data.data.user_email}님이 당신의 레포지토리에 스타를 남겼습니다.`, req.params.node_id]);
                         }
                     }
                     response.status = 200;
@@ -1356,17 +1832,18 @@ let RepositoryStar = (() => {
     })();
     return RepositoryStar = _classThis;
 })();
+exports.RepositoryStar = RepositoryStar;
 let RepositoryIssueCommentHeart = (() => {
     let _classDecorators = [Control.Service(`post`, `/api/repository/:repo_id/issue/:issue_id/comment/:node_id/heart`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var RepositoryIssueCommentHeart = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `하트 실패` };
-                const verify = { data: yield OauthVerify.service({ body: { accessToken: req.body.accessToken }, headers: { "user-agent": req.headers[`user-agent`] } }, { send: () => { }, setHeader: () => { } }) };
+                const verify = yield getVerify(req);
                 if (verify.data.status === 200) {
                     const result = yield mysql.execute(`SELECT * FROM repository_issue_comment_heart WHERE comment_id = ? AND user_email = ?`, [req.params.node_id, verify.data.data.user_email]);
                     if (result && Array.isArray(result[0])) {
@@ -1394,13 +1871,14 @@ let RepositoryIssueCommentHeart = (() => {
     })();
     return RepositoryIssueCommentHeart = _classThis;
 })();
+exports.RepositoryIssueCommentHeart = RepositoryIssueCommentHeart;
 let Topics = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/topics/:category`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var Topics = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `토픽 목록 불러오기 실패` };
@@ -1428,13 +1906,14 @@ let Topics = (() => {
     })();
     return Topics = _classThis;
 })();
+exports.Topics = Topics;
 let Categories = (() => {
     let _classDecorators = [Control.Service(`get`, `/api/categories`)];
     let _classDescriptor;
     let _classExtraInitializers = [];
     let _classThis;
     var Categories = _classThis = class {
-        static service(req, res) {
+        static service(req, res, name) {
             return __awaiter(this, void 0, void 0, function* () {
                 res.setHeader(`Content-type`, `application/json`);
                 const response = { status: 400, message: `카테고리 목록 불러오기 실패` };
@@ -1458,5 +1937,40 @@ let Categories = (() => {
     })();
     return Categories = _classThis;
 })();
-Control.setRoutes();
+exports.Categories = Categories;
+let Search = (() => {
+    let _classDecorators = [Control.Service(`get`, `/api/search`)];
+    let _classDescriptor;
+    let _classExtraInitializers = [];
+    let _classThis;
+    var Search = _classThis = class {
+        static service(req, res, name) {
+            return __awaiter(this, void 0, void 0, function* () {
+                res.setHeader(`Content-type`, `application/json`);
+                const response = { status: 400, message: `검색 실패` };
+                const resultRepos = yield mysql.execute(`SELECT R.*, U.user_name FROM repositories AS R JOIN users AS U ON R.user_email = U.user_email WHERE (R.repo_name LIKE CONCAT("%", ?, "%") OR R.repo_category LIKE CONCAT("%", ?, "%") OR R.repo_subcategory LIKE CONCAT("%", ?, "%")) AND repo_archive = 0 AND repo_visibility = 1`, [req.query.q, req.query.q, req.query.q]);
+                const resultUsers = yield mysql.execute(`SELECT user_name, user_email, avatar_src, user_bio FROM users WHERE user_name LIKE CONCAT("%", ?, "%") OR user_email LIKE CONCAT("%", ?, "%")`, [req.query.q, req.query.q]);
+                if (resultRepos && Array.isArray(resultRepos[0]) && resultUsers && Array.isArray(resultUsers[0])) {
+                    response.status = 200;
+                    response.message = `검색 성공`;
+                    response.data = {};
+                    response.data.repositories = resultRepos[0];
+                    response.data.users = resultUsers[0];
+                }
+                res.send(JSON.stringify(response));
+            });
+        }
+    };
+    __setFunctionName(_classThis, "Search");
+    (() => {
+        const _metadata = typeof Symbol === "function" && Symbol.metadata ? Object.create(null) : void 0;
+        __esDecorate(null, _classDescriptor = { value: _classThis }, _classDecorators, { kind: "class", name: _classThis.name, metadata: _metadata }, null, _classExtraInitializers);
+        Search = _classThis = _classDescriptor.value;
+        if (_metadata) Object.defineProperty(_classThis, Symbol.metadata, { enumerable: true, configurable: true, writable: true, value: _metadata });
+        __runInitializers(_classThis, _classExtraInitializers);
+    })();
+    return Search = _classThis;
+})();
+exports.Search = Search;
+Control.setRoutes(r2.r2);
 Control.spawnListen();

@@ -164,15 +164,21 @@ CREATE TABLE `repository_issue_comment_heart` (
 );
 CREATE INDEX `repository_issue_comment_heart_index` ON `repository_issue_comment_heart` (`comment_id`, `user_email`);
 
+-- DROP TABLE repository_pullrequest;
 CREATE TABLE `repository_pullrequest` (
     `node_id` INT AUTO_INCREMENT,
 
     `repo_id` INT,
+    `target_repo_id` INT,
 
     `user_email` VARCHAR(255),
 
+    `pr_status` VARCHAR(15),
     `branch_name` VARCHAR(15),
-    `pr_src` VARCHAR(15),
+    `target_branch_name` VARCHAR(15),
+    `commit_id` INT,
+    `pr_title` VARCHAR(100),
+    `pr_content` TEXT,
 
     `created_at` DATETIME DEFAULT NOW(),
     PRIMARY KEY (`node_id`)
@@ -218,3 +224,8 @@ VALUES ("ice1github@gmail.com", "고서온", "ebfbe675b88f8b8e995b19ea93da66bba6
 -- SELECT * FROM `repository_authorities` WHERE `repo_id` = 3;
 -- SELECT * FROM `user_follow`;
 -- INSERT INTO `user_alert` (`user_email`, `alert_read`, `alert_title`, `alert_content`, `alert_link`, `created_at`) VALUES ("ice1github@gmail.com", 0, "환영", "하빈다 ㅉㅈㅈㅈ", "/", "2024-09-20 14:32:09");
+
+SELECT * FROM repository_branch_commit;
+-- SELECT * FROM repositories ORDER BY created_at DESC;
+
+-- INSERT INTO repository_pullrequest (repo_id, target_repo_id, user_email, pr_status, branch_name, target_branch_name, commit_id, pr_title, pr_content) VALUES (17, 9, "ice1github@gmail.com", "대기", "main", "main", 58, "[fixed] docs update@ 2.x -> 3", "2.x 버전에서 3버전으로 업그레이드 시킵니다.")

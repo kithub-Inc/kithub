@@ -1,13 +1,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-function-type */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import express, { Express, Request, Response } from 'express';
 // import limit from 'express-rate-limit';
+import multerS3 from 'multer-s3';
 import multer from 'multer';
 import chalk from 'chalk';
 import cors from 'cors';
+import path from 'path';
 
 interface Service {
-    service: (req: Request, res: Response) => (url: string) => void;
+    service: (req: Request, res: Response, name?: any) => (url: string) => void;
 }
 
 interface Route {
@@ -45,13 +48,25 @@ class Controller {
         };
     }
 
-    public setRoutes(): void {
+    public setRoutes(r2: any): void {
         const { application: self } = this;
 
-        this.routes.forEach((route: Route) => self[route.method](route.url, multer({ dest: `data/uploads` }).single(`image`), async (req: Request, res: Response) => {
+        const upload = multer({
+            storage: multerS3({
+                s3: r2,
+                bucket: `object-storage`,
+                acl: `public-read`,
+                contentType: multerS3.AUTO_CONTENT_TYPE,
+                key(req, file, cb) {
+                    cb(null, `uploads/${Date.now()}_${path.basename(file.originalname)}`);
+                }
+            }),
+            limits: { fileSize: 200 * 1024 * 1024 }
+        });
+
+        this.routes.forEach((route: Route) => self[route.method](route.url, upload.single(`image`), (req: Request, res: Response) => {
             console.log(`${chalk.green(req.method.toUpperCase())} | ${chalk.underline(req.url)} (${req.ip})`);
-            // await new Promise((res) => setTimeout(() => res(true), 1000));
-            route.constructor.service(req, res);
+            route.constructor.service(req, res, (req.file as any));
         }));
     }
 
