@@ -28,7 +28,7 @@ import { useUser } from '@/components/hooks/use-user';
 dotenv.config();
 
 const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
-    const userData = useUser();
+    const { data: userData } = useUser();
     const router = useRouter();
 
     const [value, setValue] = useState<string>(``);
@@ -185,43 +185,26 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
                                             <CardDescription>{alerts.filter(e => !e.alert_read).length}개의 읽지 않은 메시지</CardDescription>
                                         </CardHeader>
 
-                                        <CardContent className="grid gap-4">
-                                            <div className=" flex items-center space-x-4 rounded-md border p-4">
-                                                <BellIcon />
+                                        <CardContent>
+                                            {
+                                                alerts.map(alert => (
+                                                    <div onClick={async () => {
+                                                        const response = await axios.post(`${process.env.BACKEND_URL}/api/user/alert`, { accessToken: localStorage.getItem(`accessToken`), ids: [alert.node_id] });
+                                                        if (response.data.status === 200) {
+                                                            alert.alert_read = true;
+                                                            setAlerts([...alerts]);
+                                                            router.push(alert.alert_link || `#`);
+                                                        }
+                                                    }} key={alert.node_id} className="rounded-md transition-all hover:bg-slate-100 mb-6 p-2 grid grid-cols-[20px_1fr] items-start last:mb-0 last:pb-0 cursor-pointer">
+                                                        {!alert.alert_read ? <span className="flex h-2 w-2 translate-y-1 rounded-full bg-sky-500" /> : <div className="w-2 h-2"></div>}
 
-                                                <div className="flex-1 space-y-1">
-                                                    <div className="flex items-center">
-                                                        <p className="text-sm font-medium leading-none">알림 수신</p>
-                                                        <Badge className="ml-2 px-2 py-0.5">beta</Badge>
-                                                    </div>
-
-                                                    <p className="text-sm text-muted-foreground">알림을 사용중인 디바이스로 전송합니다.</p>
-                                                </div>
-
-                                                <Switch />
-                                            </div>
-
-                                            <div>
-                                                {
-                                                    alerts.map(alert => (
-                                                        <div onClick={async () => {
-                                                            const response = await axios.post(`${process.env.BACKEND_URL}/api/user/alert`, { accessToken: localStorage.getItem(`accessToken`), ids: [alert.node_id] });
-                                                            if (response.data.status === 200) {
-                                                                alert.alert_read = true;
-                                                                setAlerts([...alerts]);
-                                                                router.push(alert.alert_link || `#`);
-                                                            }
-                                                        }} key={alert.node_id} className="mb-4 grid grid-cols-[25px_1fr] items-start pb-4 last:mb-0 last:pb-0 cursor-pointer">
-                                                            {!alert.alert_read ? <span className="flex h-2 w-2 translate-y-1 rounded-full bg-sky-500" /> : <div className="w-2 h-2"></div>}
-
-                                                            <div className="space-y-1">
-                                                                <p className="text-sm font-medium leading-5">{alert.alert_title}</p>
-                                                                <p className="text-sm text-muted-foreground">{alert.alert_content}</p>
-                                                            </div>
+                                                        <div className="space-y-1">
+                                                            <p className="text-sm font-medium leading-5">{alert.alert_title}</p>
+                                                            <p className="text-sm text-muted-foreground">{alert.alert_content}</p>
                                                         </div>
-                                                    ))
-                                                }
-                                            </div>
+                                                    </div>
+                                                ))
+                                            }
                                         </CardContent>
 
                                         <CardFooter>
@@ -244,7 +227,7 @@ const Children = ({ children, }: Readonly<{ children: React.ReactNode; }>) => {
                                             {
                                                 userData.avatar_src ?
                                                 // eslint-disable-next-line @next/next/no-img-element
-                                                <img src={`${process.env.BACKEND_URL}/api/${userData?.user_email}/avatar`} alt="Avatar" className="overflow-hidden rounded-full w-full h-full object-cover w-[36px] h-[36px]" />
+                                                <img src={userData.avatar_src} alt="Avatar" className="overflow-hidden rounded-full w-full h-full object-cover w-[36px] h-[36px]" />
                                                 :
                                                 <Image src="https://www.npmjs.com/npm-avatar/eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdmF0YXJVUkwiOiJodHRwczovL3MuZ3JhdmF0YXIuY29tL2F2YXRhci8zODMwNTNhZDE0ZTAxZWRmNjk1MzQ4MDI1NjRjMzVlZT9zaXplPTQ5NiZkZWZhdWx0PXJldHJvIn0.JcJNScgZ-HpL8xyHe2h78_DA3A0Eoke_HzeqTwYGWcs" width={36} height={36} alt="Avatar" className="overflow-hidden rounded-full w-full h-full object-cover"/>
                                             }

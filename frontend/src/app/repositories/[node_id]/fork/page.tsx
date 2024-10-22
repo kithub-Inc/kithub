@@ -43,9 +43,9 @@ const Fork = (props: any) => {
 
     const { toast } = useToast();
     const router = useRouter();
-    const userData = useUser();
+    const { data: userData, isLoading } = useUser();
 
-    if (!userData) router.push(`/`);
+    if (!isLoading && !userData) router.push(`/`);
 
     useEffect(() => {
         (async () => {
@@ -61,12 +61,12 @@ const Fork = (props: any) => {
                 if (data?.repo_archive) setArchive(data.repo_archive === 1);
                 if (data?.repo_license) setLicense(data.repo_license);
                 if (data?.repo_category) setCategory(data.repo_category);
-                if (data?.image_src) setImage(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/topic_image`);
+                if (data?.image_src) setImage(repository?.image_src || ``);
                 if (data?.repo_name) setName(data.repo_name);
                 if (data?.repo_grantes) setGrantes(data.repo_grantes.reduce((pre: [], cur: { target_email: any; authority_type: any; }) => [...pre, { user_email: cur.target_email, type: cur.authority_type }], []));
             }
         })();
-    }, [props.params.node_id]);
+    }, [props.params.node_id, repository?.image_src]);
 
     const handleSubmit = async (): Promise<void> => {
         const fileCurrent: any = file.current;
@@ -88,7 +88,7 @@ const Fork = (props: any) => {
             formdata.append(`repo_license`, license);
             formdata.append(`accessToken`, localStorage.getItem(`accessToken`) || ``);
 
-            const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/${props.params.node_id}/fork`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
+            const response = await axios.post(`${process.env.BACKEND_URL}/api/repository/fork`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
             if (response.data.status === 200) {
                 setTimeout(() => {
                     router.push(`/${userData?.user_email}`);

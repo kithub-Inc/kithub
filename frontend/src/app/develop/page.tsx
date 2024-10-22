@@ -8,6 +8,7 @@ import dotenv from 'dotenv';
 import { Button } from '@/components/ui/button';
 
 import Canvas from '@/components/canvas';
+import Editor from '@/components/editor';
 
 import { useUser } from '@/components/hooks/use-user';
 
@@ -15,7 +16,7 @@ dotenv.config();
 
 const Develop = (props: any): JSX.Element => {
     const router = useRouter();
-    const userData = useUser();
+    const { data: userData } = useUser();
 
     return (
         <>
@@ -30,7 +31,8 @@ const Develop = (props: any): JSX.Element => {
                         <h1 style={{ marginLeft: `-5px` }} className="flex-1 shrink-0 whitespace-nowrap text-xl font-semibold tracking-tight sm:grow-0 mt-1">디벨롭</h1>
                     </div>
 
-                    <Canvas width={600} height={600} />
+                    <Canvas width={800} height={400} />
+                    <Editor t={props.searchParams?.t || ``} />
                 </div>
             </main>
         </>

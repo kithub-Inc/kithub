@@ -39,9 +39,9 @@ const CreateRepository = (): JSX.Element => {
 
     const { toast } = useToast();
     const router = useRouter();
-    const userData = useUser();
+    const { data: userData, isLoading } = useUser();
 
-    if (!userData) router.push(`/`);
+    if (!isLoading && !userData) router.push(`/`);
 
     const handleSubmit = async (): Promise<void> => {
         const fileCurrent: any = file.current;

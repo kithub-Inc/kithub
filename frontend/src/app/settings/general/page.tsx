@@ -25,16 +25,16 @@ const SettingsGeneral = () => {
 
     const { toast } = useToast();
     const avatar = useRef(null);
-    const userData = useUser();
+    const { data: userData, isLoading, refetch } = useUser();
     const router = useRouter();
 
-    if (!userData) router.push(`/`);
+    if (!isLoading && !userData) router.push(`/`);
 
     useEffect(() => {
-        if (userData.avatar_src) setImage(`${process.env.BACKEND_URL}/api/${userData.user_email}/avatar`);
-        setName(userData.user_name || ``);
+        if (userData?.avatar_src) setImage(userData?.avatar_src);
+        setName(userData?.user_name || ``);
 
-        setBio(userData.user_bio || ``);
+        setBio(userData?.user_bio || ``);
     }, [userData]);
 
     const handleAvatarChange = (event: React.ChangeEvent<HTMLInputElement>): void => {
@@ -64,6 +64,7 @@ const SettingsGeneral = () => {
             const response = await axios.post(`${process.env.BACKEND_URL}/api/user/modify/avatar`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
             if (response.data.status === 200) {
                 setTimeout(() => {
+                    refetch();
                     router.push(`/settings/general`);
                     window.location.replace(`/settings/general`);
                 }, 500);
@@ -84,6 +85,7 @@ const SettingsGeneral = () => {
             const response = await axios.post(`${process.env.BACKEND_URL}/api/user/modify/name`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
             if (response.data.status === 200) {
                 setTimeout(() => {
+                    refetch();
                     router.push(`/settings/general`);
                     window.location.replace(`/settings/general`);
                 }, 500);
@@ -104,6 +106,7 @@ const SettingsGeneral = () => {
             const response = await axios.post(`${process.env.BACKEND_URL}/api/user/modify/bio`, formdata, { headers: { 'Content-Type': `multipart/form-data` } });
             if (response.data.status === 200) {
                 setTimeout(() => {
+                    refetch();
                     router.push(`/settings/general`);
                     window.location.replace(`/settings/general`);
                 }, 500);

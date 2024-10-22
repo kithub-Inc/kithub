@@ -4,11 +4,13 @@ import { CalendarIcon, ChevronLeft, MailIcon, PlusIcon, ShellIcon, SquareUserRou
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useQuery } from 'react-query';
 import dotenv from 'dotenv';
 import moment from 'moment';
 import axios from 'axios';
 
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -24,7 +26,27 @@ dotenv.config();
 
 const Repository = (props: any): JSX.Element => {
     const router = useRouter();
-    const userData = useUser();
+    const { data: userData } = useUser();
+
+    const { isLoading: reposIsLoading } = useQuery(`user_repositories`, async () => {
+        const response = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/repositories`);
+
+        if (response.data.status === 200) {
+            setRepositories(response.data.data);
+            return response.data.data;
+
+        } else return;
+    });
+
+    const { isLoading: userIsLoading } = useQuery(`user_user`, async () => {
+        const response = await axios.get(`${process.env.BACKEND_URL}/api/user/${props.params.user_email}`);
+
+        if (response.data.status === 200) {
+            setUser(response.data.data);
+            return response.data.data;
+
+        } else return;
+    });
 
     const [following, setFollowing] = useState<{ node_id: number; user_email: string; target_email: string; }[]>([]);
     const [follower, setFollower] = useState<{ node_id: number; user_email: string; target_email: string; }[]>([]);
@@ -34,11 +56,6 @@ const Repository = (props: any): JSX.Element => {
 
     useEffect(() => {
         (async () => {
-            const responseUser = await axios.get(`${process.env.BACKEND_URL}/api/user/${props.params.user_email}`);
-            if (responseUser.data.status === 200) setUser(responseUser.data.data);
-            const responseRepositories = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/repositories`);
-            if (responseRepositories.data.status === 200) setRepositories(responseRepositories.data.data);
-
             const responseFollowing = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/following`);
             if (responseFollowing.data.status === 200) setFollowing(responseFollowing.data.data);
             const responseFollower = await axios.get(`${process.env.BACKEND_URL}/api/${props.params.user_email}/follower`);
@@ -76,19 +93,38 @@ const Repository = (props: any): JSX.Element => {
                         </Button>
 
                         {
+                            userIsLoading ?
+                            <Skeleton className="w-7 h-7 rounded-full" />
+                            :
                             user.avatar_src &&
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={`${process.env.BACKEND_URL}/api/${user.user_email}/avatar`} width={1000} height={1000} alt="Avatar" className="overflow-hidden rounded-full w-7 h-7 object-cover"/>
+                            <img src={user.avatar_src} width={1000} height={1000} alt="Avatar" className="overflow-hidden rounded-full w-7 h-7 object-cover"/>
                         }
 
-                        <h1 style={{ marginLeft: `-5px` }} className="flex-1 shrink-0 whitespace-nowrap text-xl font-semibold tracking-tight sm:grow-0 mt-1">{user.user_name || user.user_email}</h1>
+                        {
+                            userIsLoading ?
+                            <Skeleton className="w-14 h-6" />
+                            :
+                            <h1 style={{ marginLeft: `-5px` }} className="flex-1 shrink-0 whitespace-nowrap text-xl font-semibold tracking-tight sm:grow-0 mt-1">{user.user_name || user.user_email}</h1>
+                        }
                     </div>
 
                     <div className="mt-5 border p-6 rounded-xl bg-white flex items-center justify-between">
                         <div className="flex items-center">
-                            <p onClick={() => router.push(`/${props.params.user_email}/following`)} className="flex items-center group hover:text-blue-600 cursor-pointer"><UserRoundPlusIcon className="w-4 h-4 mr-2 group-hover:stroke-blue-600" /><span className="font-bold mr-1">팔로잉</span> {following.length}명</p>
-                            <Separator orientation="vertical" className="mx-4 h-[30px]" />
-                            <p onClick={() => router.push(`/${props.params.user_email}/follower`)} className="flex items-center group hover:text-blue-600 cursor-pointer"><SquareUserRoundIcon className="w-4 h-4 mr-2 group-hover:stroke-blue-600" /><span className="font-bold mr-1">팔로워</span> {follower.length}명</p>
+                            {
+                                userIsLoading ?
+                                <>
+                                    <Skeleton className="w-20 h-8" />
+                                    <Separator orientation="vertical" className="mx-4 h-[30px]" />
+                                    <Skeleton className="w-20 h-8" />
+                                </>
+                                :
+                                <>
+                                    <p onClick={() => router.push(`/${props.params.user_email}/following`)} className="flex items-center group hover:text-blue-600 cursor-pointer"><UserRoundPlusIcon className="w-4 h-4 mr-2 group-hover:stroke-blue-600" /><span className="font-bold mr-1">팔로잉</span> {following.length}명</p>
+                                    <Separator orientation="vertical" className="mx-4 h-[30px]" />
+                                    <p onClick={() => router.push(`/${props.params.user_email}/follower`)} className="flex items-center group hover:text-blue-600 cursor-pointer"><SquareUserRoundIcon className="w-4 h-4 mr-2 group-hover:stroke-blue-600" /><span className="font-bold mr-1">팔로워</span> {follower.length}명</p>
+                                </>
+                            }
                         </div>
 
                         {
@@ -106,18 +142,39 @@ const Repository = (props: any): JSX.Element => {
                         <div className="block sm:flex items-start">
                             <div>
                                 <p className="text-base font-bold flex items-center"><MailIcon className="w-4 h-4 mr-2" /> 이메일</p>
-                                <p className="text-sm mt-1">{user.user_email}</p>
+                                
+                                {
+                                    userIsLoading ?
+                                    <Skeleton className="mt-1 w-48 h-4" />
+                                    :
+                                    <p className="text-sm mt-1">{user.user_email}</p>
+                                }
                             </div>
 
                             <Separator className="mx-5 h-12 hidden sm:block" orientation="vertical" />
                             
                             <div className="sm:my-0 mt-5">
                                 <p className="text-base font-bold flex items-center"><ShellIcon className="w-4 h-4 mr-2" /> 설명</p>
-                                <p className="text-sm mt-1">{user.user_bio}</p>
+
+                                {
+                                    userIsLoading ?
+                                    <>
+                                        <Skeleton className="mt-1 w-36 h-4" />
+                                        <Skeleton className="mt-2 w-48 h-4" />
+                                        <Skeleton className="mt-2 w-24 h-4" />
+                                    </>
+                                    :
+                                    <p className="text-sm mt-1">{user.user_bio}</p>
+                                }
                             </div>
                         </div>
-
-                        <p className="mt-10 text-sm flex items-center"><CalendarIcon className="w-4 h-4 mr-2" /> <span className="font-bold">{moment(user.created_at).format(`YYYY년 MM월 DD일`)}</span>에 가입함</p>
+                        
+                        {
+                            userIsLoading ?
+                            <Skeleton className="mt-10 w-48 h-4" />
+                            :
+                            <p className="mt-10 text-sm flex items-center"><CalendarIcon className="w-4 h-4 mr-2" /> <span className="font-bold">{moment(user.created_at).format(`YYYY년 MM월 DD일`)}</span>에 가입함</p>
+                        }
                     </div>
 
                     <div className="mt-10 flex items-center justify-between">
@@ -135,8 +192,18 @@ const Repository = (props: any): JSX.Element => {
                         }
                     </div>
                     
-                    <div className="flex flex-wrap items-start max-w-[59rem]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-[59rem]">
                         {
+                            reposIsLoading ?
+                            <>
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                            </>
+                            :
                             repositories.map(e =>
                                 <RepositoryItem key={e.node_id} e={e} bool />
                             )

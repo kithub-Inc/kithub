@@ -21,7 +21,7 @@ dotenv.config();
 
 const Follower = (props: any): JSX.Element => {
     const router = useRouter();
-    const userData = useUser();
+    const { data: userData } = useUser();
 
     const [follower, setFollower] = useState<{ node_id: number; user_email: string; target_email: string; user_name: string; avatar_src: string; user_bio: string; created_at: string; }[]>([]);
     const [user, setUser] = useState<IUser>({});
@@ -51,7 +51,7 @@ const Follower = (props: any): JSX.Element => {
                         {
                             user.avatar_src &&
                             // eslint-disable-next-line @next/next/no-img-element
-                            <img src={`${process.env.BACKEND_URL}/api/${user.user_email}/avatar`} alt="Avatar" className="overflow-hidden rounded-full w-7 h-7 object-cover"/>
+                            <img src={user.avatar_src} alt="Avatar" className="overflow-hidden rounded-full w-7 h-7 object-cover"/>
                         }
 
                         <h1 style={{ marginLeft: `-5px` }} className="flex-1 shrink-0 whitespace-nowrap text-xl font-semibold tracking-tight sm:grow-0 mt-1">{user.user_name || user.user_email}</h1>
@@ -71,7 +71,7 @@ const Follower = (props: any): JSX.Element => {
                                         {
                                             e.avatar_src &&
                                             // eslint-disable-next-line @next/next/no-img-element
-                                            <img src={`${process.env.BACKEND_URL}/api/${e.user_email}/avatar`} width={1000} height={1000} alt="Avatar" className="overflow-hidden rounded-full w-7 h-7 object-cover mr-2" />
+                                            <img src={e.avatar_src} width={1000} height={1000} alt="Avatar" className="overflow-hidden rounded-full w-7 h-7 object-cover mr-2" />
                                         }
 
                                         <p className="mt-1">{e.user_name || e.user_email}</p>

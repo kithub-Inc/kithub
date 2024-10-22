@@ -21,7 +21,7 @@ dotenv.config();
 
 const Alerts = (props: any): JSX.Element => {
     const router = useRouter();
-    const userData = useUser();
+    const { data: userData } = useUser();
     const [alerts, setAlerts] = useState<IAlert[]>([]);
 
     useEffect(() => {

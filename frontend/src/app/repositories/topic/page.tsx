@@ -3,10 +3,12 @@
 import { ChevronLeft } from 'lucide-react';
 
 import { useEffect, useState } from 'react';
+import { useQuery } from 'react-query';
 import dotenv from 'dotenv';
 import axios from 'axios';
 
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
 import RepositoryItem from '@/components/repository-item';
@@ -16,18 +18,28 @@ import { IRepository } from '@/interfaces/interfaces';
 dotenv.config();
 
 const Topic = (): JSX.Element => {
-    const [repositories, setRepositories] = useState<IRepository[]>([]);
     const [categories, setCategories] = useState<{ repo_category: string; }[]>([]);
+    const [repositories, setRepositories] = useState<IRepository[]>([]);
     const [category, setCategory] = useState<string>(`all`);
+
+    const { isLoading, refetch } = useQuery(`topic_repositories`, async () => {
+        const response = await axios.get(`${process.env.BACKEND_URL}/api/topics/${category}`);
+
+        if (response.data.status === 200) {
+            setRepositories(response.data.data);
+            return response.data.data;
+
+        } else return;
+    });
 
     useEffect(() => {
         (async () => {
-            const topicsResponse = await axios.get(`${process.env.BACKEND_URL}/api/topics/${category}`);
-            setRepositories(topicsResponse.data.data);
-
             const categoriesResponse = await axios.get(`${process.env.BACKEND_URL}/api/categories`);
             setCategories(categoriesResponse.data.data);
+            refetch();
         })();
+        
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [category]);
 
     return (
@@ -64,8 +76,21 @@ const Topic = (): JSX.Element => {
                         </Select>
                     </div>
                     
-                    <div className="flex flex-wrap items-start max-x-[59rem]">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-[59rem]">
                         {
+                            isLoading ?
+                            <>
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                                <Skeleton className="w-[300px] h-[200px]" />
+                            </>
+                            :
                             repositories.map(e =>
                                 <RepositoryItem key={e.node_id} e={e} />
                             )

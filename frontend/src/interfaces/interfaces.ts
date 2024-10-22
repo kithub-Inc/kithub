@@ -57,6 +57,8 @@ export interface IProps {
     fileName: string;
     setFileName: Function;
     repository?: IRepository;
+    commit?: ICommit;
+    props: any;
 }
 
 export interface IIssue {
@@ -97,5 +99,19 @@ export interface IAlert {
     alert_content: string;
     alert_read: boolean;
     alert_link: string;
+    created_at: string;
+}
+
+export interface IPullRequest {
+    node_id: number;
+    repo_id: number;
+    commit_id: number;
+    target_repo_id: number;
+    user_email: string;
+    branch_name: string;
+    target_branch_name: string;
+    pr_title: string;
+    pr_content: string;
+    pr_status: string;
     created_at: string;
 }

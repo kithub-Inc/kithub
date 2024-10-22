@@ -33,9 +33,9 @@ const SettingsSecure = () => {
 
     const { toast } = useToast();
     const router = useRouter();
-    const userData = useUser();
+    const { data: userData, isLoading } = useUser();
 
-    if (!userData) router.push(`/`);
+    if (!isLoading && !userData) router.push(`/`);
 
     useEffect(() => {
         setAccessToken(localStorage.getItem(`accessToken`) || ``);

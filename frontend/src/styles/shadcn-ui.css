@@ -2,8 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+@font-face {
+    font-family: 'Paperlogy';
+    src: url("/Paperlogy-4Regular.ttf");
+}
+
 * {
-    font-family: 'Pretendard Regular' !important;
+    /* font-family: 'Pretendard Regular' !important; */
+    font-family: 'Paperlogy' !important;
 }
 
 @layer base {
@@ -74,17 +80,19 @@
 
 .markdown * { margin: 5px 0; }
 
-.markdown h1 { font-size: 32px; font-weight: bold; }
-.markdown h2 { font-size: 24px; font-weight: bold; }
-.markdown h3 { font-size: 19px; font-weight: bold; }
-.markdown h4 { font-size: 16px; font-weight: bold; }
-.markdown h5 { font-size: 12px; font-weight: bold; }
-.markdown h6 { font-size: 10px; font-weight: bold; }
+.markdown h1 { font-size: 32px; font-weight: bold; margin-bottom: 10px; }
+.markdown h2 { font-size: 24px; font-weight: bold; margin-bottom: 10px; }
+.markdown h3 { font-size: 19px; font-weight: bold; margin-bottom: 10px; }
+.markdown h4 { font-size: 16px; font-weight: bold; margin-bottom: 10px; }
+.markdown h5 { font-size: 12px; font-weight: bold; margin-bottom: 10px; }
+.markdown h6 { font-size: 10px; font-weight: bold; margin-bottom: 10px; }
 
 .markdown h1::before, .markdown h2::before, .markdown h3::before, .markdown h4::before, .markdown h5::before, .markdown h6::before { content: '# '; color: #d4d4d4; }
 
 .markdown ul { list-style: circle; }
 .markdown ul li { margin-left: 20px; }
+.markdown ol { list-style: decimal; }
+.markdown ol li { margin-left: 20px; }
 .markdown pre { padding: 15px 20px; background: whitesmoke; border-radius: 10px; }
 .markdown code { font-family: 'Fira Code', Menlo, Monaco, 'Courier New', monospace !important; font-size: 14px !important; }
 

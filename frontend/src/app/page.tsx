@@ -24,7 +24,7 @@ import { useUser } from '@/components/hooks/use-user';
 dotenv.config();
 
 const Home = () => {
-    const userData = useUser();
+    const { data: userData } = useUser();
     const router = useRouter();
 
     const chartData = [
@@ -96,7 +96,7 @@ const Home = () => {
                                         <Card key={idx} className="mr-6 mb-6">
                                             <CardHeader className="p-6 pb-0">
                                                 <p className="flex items-center">
-                                                    <img className="w-5 h-5 rounded-full" src={`${process.env.BACKEND_URL}/api/${userData.user_email}/avatar`} alt="avatar" />
+                                                    <img className="w-5 h-5 rounded-full" src={userData.avatar_src} alt="avatar" />
                                                     <span className="ml-2 font-bold mt-0.5">{userData.user_name || userData.user_email}</span>님
                                                 </p>
                                             </CardHeader>
