@@ -14,13 +14,13 @@ const chalk_1 = __importDefault(require("chalk"));
 const cors_1 = __importDefault(require("cors"));
 const path_1 = __importDefault(require("path"));
 class Controller {
+    application = (0, express_1.default)();
+    routes = [];
+    port = 3030;
     constructor() {
         /**
          *
          */
-        this.application = (0, express_1.default)();
-        this.routes = [];
-        this.port = 3030;
         // this.application.set('trust proxy', true);
         this.application.use((0, cors_1.default)());
         this.application.use(express_1.default.json());
@@ -50,7 +50,7 @@ class Controller {
                     cb(null, `uploads/${Date.now()}_${path_1.default.basename(file.originalname)}`);
                 }
             }),
-            limits: { fileSize: 5 * 1024 * 1024 }
+            limits: { fileSize: 200 * 1024 * 1024 }
         });
         this.routes.forEach((route) => self[route.method](route.url, upload.single(`image`), (req, res) => {
             console.log(`${chalk_1.default.green(req.method.toUpperCase())} | ${chalk_1.default.underline(req.url)} (${req.ip})`);

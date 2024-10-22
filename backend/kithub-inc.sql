@@ -213,7 +213,7 @@ CREATE TABLE `user_follow` (
     PRIMARY KEY (`node_id`)
 );
 CREATE INDEX `user_follow_index` ON `user_follow` (`user_email`, `target_email`);
-DELETE FROM `user_follow` WHERE 1;
+-- DELETE FROM `user_follow` WHERE 1;
 
 
 INSERT INTO `users` (`user_email`, `user_name`, `user_password`, `user_bio`)
@@ -225,7 +225,7 @@ VALUES ("ice1github@gmail.com", "고서온", "ebfbe675b88f8b8e995b19ea93da66bba6
 -- SELECT * FROM `user_follow`;
 -- INSERT INTO `user_alert` (`user_email`, `alert_read`, `alert_title`, `alert_content`, `alert_link`, `created_at`) VALUES ("ice1github@gmail.com", 0, "환영", "하빈다 ㅉㅈㅈㅈ", "/", "2024-09-20 14:32:09");
 
-SELECT * FROM repository_branch_commit;
+-- SELECT * FROM repository_branch_commit;
 -- SELECT * FROM repositories ORDER BY created_at DESC;
 
 -- INSERT INTO repository_pullrequest (repo_id, target_repo_id, user_email, pr_status, branch_name, target_branch_name, commit_id, pr_title, pr_content) VALUES (17, 9, "ice1github@gmail.com", "대기", "main", "main", 58, "[fixed] docs update@ 2.x -> 3", "2.x 버전에서 3버전으로 업그레이드 시킵니다.")
