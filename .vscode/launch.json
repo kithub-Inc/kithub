@@ -1,0 +1,10 @@
+{
+    "configurations": [
+        {
+            "command": "cd server && npm run start:dev",
+            "name": "start dev-mode",
+            "request": "launch",
+            "type": "node-terminal"
+        }
+    ]
+}
