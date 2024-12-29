@@ -1,0 +1,9 @@
+node_modules/
+.env
+logs/
+.inf/
+cli/test/
+build/
+uploads/
+next-env.d.ts
+.tkn
